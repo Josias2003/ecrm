@@ -1,0 +1,94 @@
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.orm import Session
+from typing import List, Optional
+
+from app.core.database import get_db
+from app.core.security import get_current_user, require_roles, get_client_ip
+from app.models.models import Teacher, School, AuditLog
+from app.schemas.schemas import TeacherOut, TeacherCreate, TeacherUpdate
+
+teachers_router = APIRouter(prefix="/api/teachers", tags=["Teachers"])
+
+def log_action(db, user_id, action, desc, entity=None, eid=None, ip_address=None):
+    db.add(AuditLog(user_id=user_id, action_type=action,
+                    description=desc, entity=entity, entity_id=eid, ip_address=ip_address))
+
+@teachers_router.get("/", response_model=List[TeacherOut])
+def list_teachers(school_id: Optional[int]=Query(None),
+                  district: Optional[str]=Query(None),
+                  status: Optional[str]=Query(None),
+                  skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = db.query(Teacher).join(School)
+    if cu.role == "school" and cu.school_id:
+        q = q.filter(Teacher.school_id == cu.school_id)
+    if cu.role == "district" and cu.district:
+        q = q.filter(School.district == cu.district)
+    if school_id:
+        q = q.filter(Teacher.school_id == school_id)
+    if district:
+        q = q.filter(School.district == district)
+    if status:
+        q = q.filter(Teacher.status == status)
+    return q.offset(skip).limit(limit).all()
+
+@teachers_router.post("/", response_model=TeacherOut, status_code=201)
+def create_teacher(payload: TeacherCreate, request: Request, db: Session = Depends(get_db),
+                   cu=Depends(require_roles("admin","reb","district","school","enumerator"))):
+    t = Teacher(**payload.model_dump())
+    db.add(t)
+    ip = get_client_ip(request)
+    log_action(db, cu.id, "CREATE", f"Added teacher {payload.full_name}", "Teacher", ip_address=ip)
+    db.commit()
+    db.refresh(t)
+    return t
+
+@teachers_router.patch("/{tid}", response_model=TeacherOut)
+def update_teacher(tid: int, payload: TeacherUpdate, request: Request, db: Session = Depends(get_db),
+                   cu=Depends(get_current_user)):
+    t = db.query(Teacher).filter(Teacher.id == tid).first()
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    for k, v in payload.model_dump(exclude_none=True).items():
+        setattr(t, k, v)
+    ip = get_client_ip(request)
+    log_action(db, cu.id, "UPDATE", f"Updated teacher {t.full_name}", "Teacher", tid, ip_address=ip)
+    db.commit()
+    db.refresh(t)
+    return t
+
+@teachers_router.delete("/{tid}")
+def delete_teacher(tid: int, request: Request, db: Session = Depends(get_db),
+                   cu=Depends(require_roles("admin","district","school"))):
+    t = db.query(Teacher).filter(Teacher.id == tid).first()
+    if not t:
+        raise HTTPException(404, "Teacher not found")
+    db.delete(t)
+    ip = get_client_ip(request)
+    log_action(db, cu.id, "DELETE", f"Removed teacher {t.full_name}", "Teacher", tid, ip_address=ip)
+    db.commit()
+    return {"message": "Teacher removed"}
+
+@teachers_router.get("/workload/analysis")
+def workload_analysis(district: Optional[str]=Query(None),
+                      db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = db.query(School)
+    if cu.role == "district" and cu.district:
+        q = q.filter(School.district == cu.district)
+    elif district:
+        q = q.filter(School.district == district)
+    schools = q.all()
+    analysis = []
+    for s in schools:
+        stu = (s.students_boys or 0) + (s.students_girls or 0)
+        tea = (s.teachers_male or 0) + (s.teachers_female or 0)
+        ratio = round(stu / tea, 1) if tea > 0 else 0
+        analysis.append({
+            "school_id": s.id, "school_name": s.name,
+            "district": s.district, "students": stu,
+            "teachers": tea, "ratio": ratio,
+            "overloaded": ratio > 50,
+            "recommended_teachers": max(1, round(stu / 40)),
+            "teacher_gap": max(0, round(stu / 40) - tea),
+        })
+    return sorted(analysis, key=lambda x: x["ratio"], reverse=True)
