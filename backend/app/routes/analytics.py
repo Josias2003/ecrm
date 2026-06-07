@@ -5,7 +5,9 @@ from typing import List, Optional
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models.models import School, ResourceAlert, Feedback, EnrollmentHistory, StatusEnum, FeedbackStatusEnum
+from app.models.models import School, Teacher, ResourceAlert, Feedback, EnrollmentHistory, StatusEnum, FeedbackStatusEnum, User, RoleEnum
+from app.services.school_scope import scoped_schools_query
+from app.services.school_metrics import resource_rows_for_school
 from app.schemas.schemas import NationalStats, DistrictStats
 
 analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
@@ -32,11 +34,16 @@ def national_stats(db: Session = Depends(get_db),
 
 @analytics_router.get("/districts", response_model=List[DistrictStats])
 def district_stats(db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    officers = {
+        u.district: u.full_name
+        for u in db.query(User).filter(User.role == RoleEnum.district, User.is_active == True).all()
+    }
     results = []
     for (dist,) in db.query(School.district).distinct():
         ss = db.query(School).filter(School.district == dist).all()
         stu = sum((s.students_boys or 0)+(s.students_girls or 0) for s in ss)
         tea = sum((s.teachers_male or 0)+(s.teachers_female or 0) for s in ss)
+        officer = officers.get(dist)
         results.append(DistrictStats(
             district=dist, total_schools=len(ss), total_students=stu, total_teachers=tea,
             critical_schools=sum(1 for s in ss if s.status == StatusEnum.critical),
@@ -45,17 +52,86 @@ def district_stats(db: Session = Depends(get_db), cu=Depends(get_current_user)):
             avg_pupil_teacher_ratio=round(stu/tea, 2) if tea else 0,
             schools_with_water=sum(1 for s in ss if s.has_water),
             schools_with_electricity=sum(1 for s in ss if s.has_electricity),
+            district_officer=officer,
+            officer_assigned=bool(officer),
         ))
     return results
+
+@analytics_router.get("/resource-inventory")
+def resource_inventory(
+    category: Optional[str] = Query(None),
+    school_id: Optional[int] = Query(None),
+    district: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    cu=Depends(get_current_user),
+):
+    q = scoped_schools_query(db, cu, district=district, school_id=school_id)
+    ss = q.all()
+    rows = []
+    for s in ss:
+        rows.extend(resource_rows_for_school(s))
+    if category:
+        rows = [r for r in rows if r["category"] == category]
+    adequate = sum(1 for r in rows if r["gap"] >= 0)
+    by_cat = {}
+    for r in rows:
+        c = r["category"]
+        if c not in by_cat:
+            by_cat[c] = {"items": 0, "units": 0}
+        by_cat[c]["items"] += 1
+        by_cat[c]["units"] += r["available"]
+    return {
+        "rows": rows,
+        "summary": {
+            "line_items": len(rows),
+            "adequacy_pct": round(adequate / len(rows) * 100) if rows else 0,
+            "shortages": sum(1 for r in rows if r["gap"] < 0),
+            "categories": len(by_cat),
+            "total_units": sum(r["available"] for r in rows),
+            "by_category": by_cat,
+        },
+    }
+
+
+@analytics_router.get("/teacher-coverage")
+def teacher_coverage(
+    school_id: Optional[int] = Query(None),
+    district: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    cu=Depends(get_current_user),
+):
+    sq = scoped_schools_query(db, cu, district=district, school_id=school_id)
+    schools = sq.all()
+    school_ids = [s.id for s in schools]
+    if not school_ids:
+        return {
+            "total_teachers": 0,
+            "active_teachers": 0,
+            "students": 0,
+            "pupil_teacher_ratio": None,
+            "subjects": [],
+        }
+    teachers = db.query(Teacher).filter(Teacher.school_id.in_(school_ids)).all()
+    students = sum((s.students_boys or 0) + (s.students_girls or 0) for s in schools)
+    active = sum(1 for t in teachers if t.status == "Active")
+    by_subject = {}
+    for t in teachers:
+        sub = (t.subject or "Unspecified").strip()
+        by_subject[sub] = by_subject.get(sub, 0) + 1
+    ratio = round(students / len(teachers), 1) if teachers else None
+    return {
+        "total_teachers": len(teachers),
+        "active_teachers": active,
+        "students": students,
+        "pupil_teacher_ratio": ratio,
+        "subjects": [{"subject": k, "count": v} for k, v in sorted(by_subject.items(), key=lambda x: (-x[1], x[0]))],
+    }
+
 
 @analytics_router.get("/resource-gaps")
 def resource_gaps(district: Optional[str]=Query(None),
                   db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    q = db.query(School)
-    if cu.role == "district" and cu.district:
-        q = q.filter(School.district == cu.district)
-    elif district:
-        q = q.filter(School.district == district)
+    q = scoped_schools_query(db, cu, district=district)
     ss = q.all()
     total_stu = sum((s.students_boys or 0)+(s.students_girls or 0) for s in ss)
     return {

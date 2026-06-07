@@ -31,6 +31,7 @@ class UserCreate(BaseModel):
     role: RoleEnum
     district: Optional[str] = None
     school_id: Optional[int] = None
+    is_active: bool = True
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -51,8 +52,30 @@ class ChangePasswordRequest(BaseModel):
 class UserOut(BaseModel):
     id: int; full_name: str; email: str; role: str
     district: Optional[str]; school_id: Optional[int]
+    school_name: Optional[str] = None
     is_active: bool; created_at: datetime
     class Config: from_attributes = True
+
+class UnassignedSchoolOut(BaseModel):
+    id: int
+    name: str
+    district: str
+    school_code: str
+
+class IncompleteUserOut(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    role: str
+    issue: str
+
+class AssignmentGapsOut(BaseModel):
+    unassigned_schools: List[UnassignedSchoolOut]
+    unassigned_districts: List[str]
+    incomplete_users: List[IncompleteUserOut]
+    unassigned_school_count: int
+    unassigned_district_count: int
+    incomplete_user_count: int
 
 # ── SCHOOL ────────────────────────────────────────────────────────
 class SchoolCreate(BaseModel):
@@ -100,6 +123,11 @@ class SchoolOut(BaseModel):
     has_fence: bool; has_canteen: bool
     distance_to_road_km: Optional[float]
     status: str; created_at: datetime; updated_at: Optional[datetime]
+    school_code: str = ""
+    infrastructure_score: int = 0
+    connectivity_label: str = "None"
+    total_students: int = 0
+    total_teachers: int = 0
     class Config: from_attributes = True
 
 # ── TEACHER ───────────────────────────────────────────────────────
@@ -238,6 +266,8 @@ class DistrictStats(BaseModel):
     total_teachers: int; critical_schools: int; moderate_schools: int
     good_schools: int; avg_pupil_teacher_ratio: float
     schools_with_water: int; schools_with_electricity: int
+    district_officer: Optional[str] = None
+    officer_assigned: bool = False
 
 class NationalStats(BaseModel):
     total_schools: int; total_students: int; total_teachers: int

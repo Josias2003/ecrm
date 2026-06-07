@@ -6,7 +6,8 @@ import {
   Search,
   Bell,
   ChevronUp,
-  Menu,
+  PanelLeftClose,
+  PanelLeft,
   Settings,
   LogOut,
   LayoutDashboard,
@@ -18,11 +19,15 @@ import {
   BarChart3,
   Users as UsersIcon,
   ClipboardList,
+  ClipboardPen,
   Flag,
   FileText,
   ScrollText,
   MessagesSquare,
   User,
+  Package,
+  MapPinned,
+  Scale,
 } from 'lucide-react'
 import LandingPage from './pages/LandingPage'
 import GISMapPage from './pages/GISMapPage'
@@ -36,6 +41,11 @@ import DashboardRouter from './pages/DashboardRouter'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import ReportsPage from './pages/ReportsPage'
+import ResourcesPage from './pages/ResourcesPage'
+import DistrictsPage from './pages/DistrictsPage'
+import GapAnalysisPage from './pages/GapAnalysisPage'
+import DataEntryPage from './pages/DataEntryPage'
+import NotificationsPage from './pages/NotificationsPage'
 import LogsPage from './pages/LogsPage'
 import ChatPage from './pages/ChatPage'
 import { useTheme } from './store/theme'
@@ -52,10 +62,15 @@ const ROUTE_ROLES = {
   '/feedback':  ['reb','district','school','community'],
   '/alerts':    ['reb','district','school','enumerator'],
   '/analytics': ['reb','district'],
+  '/resources': ['reb','district','school'],
+  '/districts': ['reb','district'],
+  '/gap-analysis': ['reb','district'],
   '/users':     ['admin'],
   '/logs':      ['admin'],
   '/reports':   ['reb','district','school','enumerator','community'],
   '/chat':      ['reb','district','school','enumerator'],
+  '/data-entry': ['school'],
+  '/notifications': ['reb','district','school'],
 }
 
 const BASE_NAV = {
@@ -65,28 +80,36 @@ const BASE_NAV = {
   ],
   reb:       [
     { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
-    { path:'/schools',   label:'All Schools',  icon:School },
-    { path:'/gis',       label:'National GIS', icon:MapIcon, highlight:true },
+    { path:'/schools',   label:'Schools',      icon:School },
+    { path:'/gis',       label:'GIS Map',      icon:MapIcon, highlight:true },
     { path:'/teachers',  label:'Teachers',     icon:UserRound },
+    { path:'/resources', label:'Resources',    icon:Package },
     { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
     { path:'/alerts',    label:'Alerts',       icon:BellRing },
-    { path:'/analytics', label:'Analytics',    icon:BarChart3 },
+    { path:'/reports',   label:'Reports',      icon:FileText },
+    { path:'/gap-analysis', label:'Gap Analysis', icon:Scale },
+    { path:'/districts', label:'Districts',    icon:MapPinned },
   ],
   district:  [
     { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
     { path:'/schools',   label:'My Schools',   icon:School },
     { path:'/gis',       label:'District Map', icon:MapIcon, highlight:true },
     { path:'/teachers',  label:'Teachers',     icon:UserRound },
+    { path:'/resources', label:'Resources',    icon:Package },
     { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
     { path:'/alerts',    label:'Alerts',       icon:BellRing },
-    { path:'/analytics', label:'Analytics',    icon:BarChart3 },
+    { path:'/reports',   label:'Reports',      icon:FileText },
+    { path:'/gap-analysis', label:'Gap Analysis', icon:Scale },
+    { path:'/districts', label:'Districts',    icon:MapPinned },
   ],
   school:    [
     { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
     { path:'/schools',   label:'My School',    icon:School },
-    { path:'/teachers',  label:'My Teachers',  icon:UserRound },
-    { path:'/feedback',  label:'My Issues',    icon:MessageSquare },
-    { path:'/alerts',    label:'Alerts',       icon:BellRing },
+    { path:'/teachers',  label:'Teachers',     icon:UserRound },
+    { path:'/resources', label:'Resources',    icon:Package },
+    { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
+    { path:'/data-entry', label:'Data Entry', icon:ClipboardPen },
+    { path:'/notifications', label:'Notifications', icon:Bell },
   ],
   enumerator:[
     { path:'/dashboard', label:'Collect Data', icon:ClipboardList },
@@ -109,8 +132,9 @@ const EXTRA_NAV = {
 function navForRole(role) {
   const base = [...(BASE_NAV[role] || BASE_NAV.community)]
   const extras = []
-  if (['reb','district','school','enumerator','community'].includes(role)) extras.push(EXTRA_NAV.reports)
+  if (['enumerator','community'].includes(role)) extras.push(EXTRA_NAV.reports)
   if (role === 'admin') extras.push(EXTRA_NAV.logs)
+  if (['school'].includes(role)) extras.push(EXTRA_NAV.reports)
   if (['reb','district','school','enumerator'].includes(role)) extras.push(EXTRA_NAV.chat)
   return [...base, ...extras]
 }
@@ -141,50 +165,34 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
       position:'fixed', left:0, top:0, zIndex:100, overflow:'hidden',
       transition:'width 200ms ease, min-width 200ms ease' }}>
 
-      {/* Brand + toggle — top row */}
+      {/* Brand — top row */}
       <div style={{
         padding: collapsed ? '14px 10px' : '14px 14px',
         borderBottom:'1px solid rgba(255,255,255,.08)',
         display:'flex', alignItems:'center', gap:10,
+        justifyContent: collapsed ? 'center' : 'flex-start',
         transition:'padding 200ms ease',
       }}>
-        <button
-          onClick={onToggle}
-          aria-label="Toggle sidebar"
-          style={{
-            width:36, height:36, flexShrink:0,
-            borderRadius:10,
-            border:'1px solid rgba(226,232,240,.16)',
-            background:'rgba(255,255,255,.04)',
-            color:'rgba(148,163,184,.95)',
-            cursor:'pointer',
-            display:'flex',
-            alignItems:'center',
-            justifyContent:'center',
-          }}
-        >
-          <Menu size={18} />
-        </button>
-        <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0, flex:1 }}>
-          <div style={{ width:36, height:36, borderRadius:10, flexShrink:0,
-            background:'linear-gradient(135deg,#2563EB,#06B6D4)',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            fontFamily:'Syne', fontSize:14, fontWeight:800, color:'#fff' }}>EC</div>
-          {!collapsed && (
-            <div style={{ minWidth:0 }}>
-              <div style={{ fontFamily:'Syne', fontSize:15, fontWeight:800, color:'#fff', letterSpacing:.3 }}>ECRM</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,.38)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                Rwanda · Resource Mapping
-              </div>
+        <div style={{ width:36, height:36, borderRadius:10, flexShrink:0,
+          background:'linear-gradient(135deg,#2563EB,#06B6D4)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontFamily:'Syne', fontSize:14, fontWeight:800, color:'#fff' }}>EC</div>
+        {!collapsed && (
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:'Syne', fontSize:15, fontWeight:800, color:'#fff', letterSpacing:.3 }}>ECRM</div>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,.38)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              Rwanda · Resource Mapping
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Nav */}
       <nav style={{ flex:1, overflowY:'auto', padding:'10px 10px', transition:'padding 200ms ease' }}>
-        <div style={{ fontSize:10, color:'rgba(255,255,255,.28)', padding:'6px 10px 8px',
-          letterSpacing:1.2, textTransform:'uppercase', fontWeight:600 }}>Menu</div>
+        {!collapsed && (
+          <div style={{ fontSize:10, color:'rgba(255,255,255,.28)', padding:'6px 10px 8px',
+            letterSpacing:1.2, textTransform:'uppercase', fontWeight:600 }}>Menu</div>
+        )}
         {nav.map(item => (
           <NavLink key={item.path} to={item.path}
             style={({ isActive }) => ({
@@ -235,8 +243,27 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
         ))}
       </nav>
 
-      {/* User menu — bottom */}
-      <div style={{ padding:'12px 10px', borderTop:'1px solid rgba(255,255,255,.08)', position:'relative' }}>
+      {/* Collapse + user — bottom */}
+      <div style={{ padding:'10px 10px 12px', borderTop:'1px solid rgba(255,255,255,.08)', position:'relative' }}>
+        <button
+          onClick={onToggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={{
+            display:'flex', alignItems:'center', gap:10, width:'100%',
+            padding: collapsed ? '9px 0' : '9px 10px',
+            marginBottom:8, borderRadius:10,
+            border:'1px solid rgba(226,232,240,.12)',
+            background:'rgba(255,255,255,.04)',
+            color:'rgba(148,163,184,.95)',
+            cursor:'pointer',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+          }}
+        >
+          {collapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+          {!collapsed && <span style={{ fontSize:12.5, fontWeight:600 }}>Collapse menu</span>}
+        </button>
+
         <button
           onClick={() => setMenuOpen(v => !v)}
           style={{
@@ -442,7 +469,13 @@ function Topbar({ pendingAlerts }) {
 
 function AppShell({ user }) {
   const [pendingAlerts, setPendingAlerts] = useState(0)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecrm-sidebar-collapsed')
+      if (saved !== null) return saved === '1'
+    } catch { /* ignore */ }
+    return window.innerWidth < 1024
+  })
   const { init: initTheme } = useTheme()
 
   useEffect(() => { initTheme() }, [initTheme])
@@ -457,17 +490,16 @@ function AppShell({ user }) {
   }, [user?.role])
 
   useEffect(() => {
-    const apply = () => setCollapsed(window.innerWidth < 1024)
-    apply()
-    window.addEventListener('resize', apply)
-    return () => window.removeEventListener('resize', apply)
-  }, [])
+    try { localStorage.setItem('ecrm-sidebar-collapsed', collapsed ? '1' : '0') } catch { /* ignore */ }
+  }, [collapsed])
+
+  const toggleSidebar = () => setCollapsed(v => !v)
 
   const sidebarWidth = collapsed ? 64 : 240
 
   return (
     <div style={{ display:'flex', minHeight:'100vh' }}>
-      <Sidebar user={user} pendingAlerts={pendingAlerts} collapsed={collapsed} onToggle={()=>setCollapsed(v=>!v)} />
+      <Sidebar user={user} pendingAlerts={pendingAlerts} collapsed={collapsed} onToggle={toggleSidebar} />
       <div style={{ marginLeft:sidebarWidth, flex:1, display:'flex',
         flexDirection:'column', minHeight:'100vh', overflow:'hidden' }}>
         <Topbar pendingAlerts={pendingAlerts} />
@@ -485,6 +517,11 @@ function AppShell({ user }) {
               <Route path="/profile"   element={<ProfilePage />} />
               <Route path="/settings"  element={<SettingsPage />} />
               <Route path="/reports"   element={<ProtectedRoute path="/reports" user={user}><ReportsPage /></ProtectedRoute>} />
+              <Route path="/resources" element={<ProtectedRoute path="/resources" user={user}><ResourcesPage /></ProtectedRoute>} />
+              <Route path="/districts" element={<ProtectedRoute path="/districts" user={user}><DistrictsPage /></ProtectedRoute>} />
+              <Route path="/gap-analysis" element={<ProtectedRoute path="/gap-analysis" user={user}><GapAnalysisPage /></ProtectedRoute>} />
+              <Route path="/data-entry" element={<ProtectedRoute path="/data-entry" user={user}><DataEntryPage /></ProtectedRoute>} />
+              <Route path="/notifications" element={<ProtectedRoute path="/notifications" user={user}><NotificationsPage /></ProtectedRoute>} />
               <Route path="/logs"      element={<ProtectedRoute path="/logs" user={user}><LogsPage /></ProtectedRoute>} />
               <Route path="/chat"      element={<ProtectedRoute path="/chat" user={user}><ChatPage /></ProtectedRoute>} />
               <Route path="*"          element={<Navigate to="/dashboard" replace />} />

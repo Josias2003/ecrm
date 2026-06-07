@@ -5,15 +5,18 @@ import { analyticsAPI, alertsAPI, feedbackAPI, schoolsAPI, reportsAPI, systemAPI
 import toast from 'react-hot-toast'
 import { StatCard, Card, CardHeader, CardBody, DonutChart, ProgressBar,
          Badge, Alert, Table, Btn, Tabs, Empty, PageHeader } from '../components/UI'
+import QuickActions from '../components/QuickActions'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
          CartesianGrid, LineChart, Line, Legend } from 'recharts'
 import { useState } from 'react'
 import {
   School, Users, BookOpen, AlertTriangle, TrendingUp, MapPin, Download,
   Armchair, Building2, CircleCheck, Droplets, Zap, Globe, Lock, UtensilsCrossed,
-  Library, FlaskConical, Monitor, MessageSquare,
+  Library, FlaskConical, Monitor, MessageSquare, FileText, BarChart3, Package,
 } from 'lucide-react'
 import { formatLabel } from '../utils/format'
+import SchoolEmptyState from '../components/SchoolEmptyState'
+import { schoolCode, infrastructureScore, connectivityLabel, connectivityBadgeStatus } from '../utils/schoolMetrics'
 
 function monthStart() {
   const d = new Date()
@@ -97,21 +100,42 @@ function REBDashboard() {
   const { data: dists=[] } = useQuery({ queryKey:['districts'], queryFn:()=>analyticsAPI.districts().then(r=>r.data) })
   const { data: gaps={} }  = useQuery({ queryKey:['gaps'], queryFn:()=>analyticsAPI.gaps({}).then(r=>r.data) })
   const { data: trends=[] }= useQuery({ queryKey:['trends'], queryFn:()=>analyticsAPI.trends({}).then(r=>r.data) })
+  const { data: openAlerts=0 } = useQuery({
+    queryKey: ['reb-open-alerts'],
+    queryFn: () => alertsAPI.count({ resolved: false }).then(r => r.data.total),
+  })
+  const { data: pendingFb=0 } = useQuery({
+    queryKey: ['reb-pending-fb'],
+    queryFn: () => feedbackAPI.count({ status: 'pending' }).then(r => r.data.total),
+  })
   const totalTea = dists.reduce((a,d)=>a+d.total_teachers,0)
   const ratio = n.total_students&&totalTea ? (n.total_students/totalTea).toFixed(1) : '—'
+  const infraIdx = n.total_schools
+    ? Math.round((n.good_schools * 100 + n.moderate_schools * 50) / n.total_schools)
+    : 0
+  const connRate = n.total_schools
+    ? Math.round((n.schools_with_electricity || 0) / n.total_schools * 100)
+    : 0
 
   return (
     <div>
       <PageHeader title="National Education Overview"
-        sub={`Rwanda Education Board · ${n.total_schools||0} public schools`}
+        sub={`Rwanda Education Board · ${n.total_schools||0} public schools · ${dists.length} districts`}
         action={<Btn onClick={() => downloadReport('district_overview')}><Download size={16}/> Export National Report</Btn>}/>
       {n.critical_schools>0&&<Alert type="warning"><strong>{n.critical_schools} schools</strong> in critical condition — resource intervention required.</Alert>}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:14,marginBottom:22}}>
         <StatCard label="Schools"    value={n.total_schools||0} sub="Public mapped" icon={School} accent="blue"/>
         <StatCard label="Students"   value={n.total_students?(n.total_students/1000).toFixed(1)+'K':'—'} sub="Enrolled" icon={Users} accent="green"/>
-        <StatCard label="P:T Ratio"  value={`1:${ratio}`} sub="National average" icon={TrendingUp} accent="amber"/>
-        <StatCard label="GPS Mapped" value={n.schools_gps_verified||0} sub="Coordinates verified" icon={MapPin} accent="cyan"/>
+        <StatCard label="Infrastructure" value={`${infraIdx}%`} sub="Weighted facility index" icon={Building2} accent="purple"/>
+        <StatCard label="Connectivity" value={`${connRate}%`} sub="Schools with power" icon={Zap} accent="cyan"/>
+        <StatCard label="Open Cases" value={openAlerts + pendingFb} sub={`${openAlerts} alerts · ${pendingFb} feedback`} icon={AlertTriangle} accent="red"/>
       </div>
+      <QuickActions actions={[
+        { label: 'View GIS Map', sub: 'National school layer', icon: MapPin, path: '/gis', color: '#2563EB' },
+        { label: 'Generate Report', sub: 'PDF templates', icon: FileText, path: '/reports', color: '#8B5CF6' },
+        { label: 'Gap Analysis', sub: 'Equity index', icon: BarChart3, path: '/gap-analysis', color: '#F59E0B' },
+        { label: 'Resource Inventory', sub: 'Available vs required', icon: Package, path: '/resources', color: '#10B981' },
+      ]}/>
       <Tabs tabs={[{id:'overview',label:'Overview'},{id:'districts',label:'Districts'},{id:'trends',label:'Trends'},{id:'resources',label:'Resources'}]} active={tab} onChange={setTab}/>
       {tab==='overview'&&(<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
         <Card><CardHeader title="Schools by Status"/><CardBody><DonutChart good={n.good_schools} moderate={n.moderate_schools} critical={n.critical_schools}/></CardBody></Card>
@@ -301,48 +325,66 @@ function DistrictDashboard() {
 // ── SCHOOL HEAD DASHBOARD ──────────────────────────────────────────
 function SchoolDashboard() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('overview')
+  const hasSchool = !!user?.school_id
+
   const { data: school } = useQuery({
     queryKey:['school',user?.school_id],
-    queryFn:()=>user?.school_id?schoolsAPI.get(user.school_id).then(r=>r.data):null,
-    enabled:!!user?.school_id
+    queryFn:()=>schoolsAPI.get(user.school_id).then(r=>r.data),
+    enabled:hasSchool
   })
   const { data: teachers=[] } = useQuery({
     queryKey:['teachers',user?.school_id],
     queryFn:()=>import('../api/api').then(m=>m.teachersAPI.list({school_id:user?.school_id}).then(r=>r.data)),
-    enabled:!!user?.school_id
+    enabled:hasSchool
   })
   const { data: feedback=[] } = useQuery({
     queryKey:['feedback-school',user?.school_id],
     queryFn:()=>feedbackAPI.list({school_id:user?.school_id}).then(r=>r.data),
-    enabled:!!user?.school_id
+    enabled:hasSchool
   })
   const { data: alerts=[] } = useQuery({
     queryKey:['alerts-school',user?.school_id],
     queryFn:()=>alertsAPI.list({school_id:user?.school_id,resolved:false}).then(r=>r.data),
-    enabled:!!user?.school_id
+    enabled:hasSchool
   })
   const { data: history=[] } = useQuery({
     queryKey:['history',user?.school_id],
     queryFn:()=>import('../api/api').then(m=>m.enrollmentAPI.get(user.school_id).then(r=>r.data)),
-    enabled:!!user?.school_id
+    enabled:hasSchool
   })
   const s = school||{}
+
+  if (!hasSchool) {
+    return (
+      <div>
+        <PageHeader title="Dashboard" sub="School Head overview" />
+        <SchoolEmptyState />
+      </div>
+    )
+  }
   const stu=(s.students_boys||0)+(s.students_girls||0)
   const tea=(s.teachers_male||0)+(s.teachers_female||0)
   const ratio=stu&&tea?(stu/tea).toFixed(1):'—'
 
+  const infra = infrastructureScore(s)
+
   return (
     <div>
       <PageHeader title={s.name||'My School'}
-        sub={`${s.district} · ${s.sector} · ${s.school_type}`}
-        action={<div style={{display:'flex',gap:8,alignItems:'center'}}>{s.status&&<Badge status={s.status} size="lg"/>}</div>}/>
+        sub={`${schoolCode(s)} · ${s.district} · ${s.sector} · ${s.school_type}`}
+        action={<div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <Badge status={connectivityBadgeStatus(connectivityLabel(s))} label={connectivityLabel(s)}/>
+          {s.status&&<Badge status={s.status} size="lg"/>}
+          <Btn variant="outline" size="sm" onClick={()=>navigate('/schools')}>View profile</Btn>
+        </div>}/>
       {alerts.filter(a=>a.level==='critical').length>0&&<Alert type="danger">{alerts.filter(a=>a.level==='critical').length} critical resource alerts for your school.</Alert>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <StatCard label="Students"   value={stu}         sub={`${s.students_boys||0} boys · ${s.students_girls||0} girls`} icon={Users} accent="blue"/>
         <StatCard label="Teachers"   value={tea}         sub={`${s.teachers_male||0}M · ${s.teachers_female||0}F`} icon={Users} accent="green"/>
         <StatCard label="P:T Ratio"  value={`1:${ratio}`}sub="Pupil to teacher" icon={TrendingUp} accent="amber"/>
-        <StatCard label="Classrooms" value={s.classrooms||0} sub={`${s.classrooms_good||0} usable`} icon={School} accent="cyan"/>
+        <StatCard label="Infrastructure" value={`${infra}%`} sub="Facility index" icon={Building2} accent="purple"/>
       </div>
       <Tabs tabs={[{id:'overview',label:'Overview'},{id:'resources',label:'Resources'},{id:'teachers',label:'Teachers'},{id:'history',label:'History'},{id:'feedback',label:'Feedback'}]} active={tab} onChange={setTab}/>
       {tab==='overview'&&(<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>

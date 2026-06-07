@@ -1,12 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import SchoolFormFields from '../components/SchoolFormFields'
 import { formatLabel } from '../utils/format'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, usersAPI, logsAPI } from '../api/api'
+import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, logsAPI } from '../api/api'
 import { useAuth } from '../store/auth'
 import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, Table,
-         Modal, Field, Input, Select, Textarea, Tabs, Empty, PageHeader,
+         Modal, Field, Input, Select, Textarea, Tabs, IconToggleGroup, Empty, PageHeader,
          ProgressBar, DonutChart, Checkbox, Pagination } from '../components/UI'
 import { PAGE_SIZE, pageSlice, totalPages as calcTotalPages } from '../utils/pagination'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -15,9 +15,14 @@ import {
   School, Users, BookOpen, AlertTriangle, TrendingUp, Download,
   Building2, Armchair, CircleCheck, Droplets, Zap, Monitor, MapPin,
   Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound,
+  List, LayoutGrid, Map,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DISTRICT_NAMES, sectorsFor } from '../constants/rwandaDistricts'
+import { schoolCode, infrastructureScore, connectivityLabel, scoreColor, connectivityBadgeStatus, totalStudents } from '../utils/schoolMetrics'
+import SchoolEmptyState from '../components/SchoolEmptyState'
+import IconActions from '../components/IconActions'
+import GISMap from '../components/GISMap'
 
 const apiErr = (e) => toast.error(
   typeof e?.response?.data?.detail === 'string'
@@ -61,7 +66,7 @@ export function SchoolsPage() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const q = searchParams.get('q') || ''
-  const [fd, setFd] = useState(user?.role==='district'?user.district:'')
+  const [fd, setFd] = useState(['district','enumerator'].includes(user?.role) ? (user?.district || '') : '')
   const [fs, setFs] = useState('')
   const [ft, setFt] = useState('')
   const [view, setView] = useState('list')
@@ -70,10 +75,20 @@ export function SchoolsPage() {
   const [detailS, setDetailS] = useState(null)
   const [form, setForm] = useState(EMPTY_SCHOOL)
   const [page, setPage] = useState(1)
+  const lockDistrict = ['district', 'enumerator'].includes(user?.role)
+  const showMapToggle = ['reb', 'district', 'enumerator'].includes(user?.role)
 
   useEffect(() => { setPage(1) }, [fd, fs, ft, q])
+  useEffect(() => {
+    if (lockDistrict && user?.district) setFd(user.district)
+  }, [lockDistrict, user?.district])
 
   const listParams = { district: fd || undefined, status: fs || undefined, school_type: ft || undefined }
+  const { data: mapSchools = [] } = useQuery({
+    queryKey: ['schools-map', fd, fs, ft, user?.district],
+    queryFn: () => schoolsAPI.list({ ...listParams, limit: 500 }).then(r => r.data),
+    enabled: view === 'map' && user?.role !== 'school',
+  })
   const { data: schoolPage = { items: [], total: 0 }, isLoading } = useQuery({
     queryKey: ['schools', fd, fs, ft, page, q],
     queryFn: () => fetchPagedList({
@@ -131,18 +146,69 @@ export function SchoolsPage() {
   }
   const canEdit = user?.role === 'district' || user?.role === 'enumerator' || user?.role === 'school'
   const canDel  = user?.role === 'district'
-  const lockDistrict = ['district', 'enumerator'].includes(user?.role)
-  const schoolAutoOpened = useRef(false)
 
-  useEffect(() => {
-    if (schoolAutoOpened.current) return
-    if (user?.role === 'school' && schools.length === 1) {
-      schoolAutoOpened.current = true
-      const s = schools[0]
-      setForm({ ...s, latitude: s.latitude || '', longitude: s.longitude || '', distance_to_road_km: s.distance_to_road_km || '' })
-      setEditS(s)
-    }
-  }, [schools, user?.role])
+  const mySchool = user?.role === 'school' ? schools[0] : null
+
+  if (user?.role === 'school' && !user?.school_id) {
+    return (
+      <div>
+        <PageHeader title="My School" sub="School profile and updates" />
+        <SchoolEmptyState title="School not found" message="Your account is not linked to a school. Contact your district administrator." />
+      </div>
+    )
+  }
+
+  if (user?.role === 'school' && mySchool && !isLoading) {
+    const s = mySchool
+    const stu = (s.students_boys || 0) + (s.students_girls || 0)
+    const tea = (s.teachers_male || 0) + (s.teachers_female || 0)
+    const infra = infrastructureScore(s)
+    return (
+      <div>
+        <PageHeader title={s.name} sub={`${schoolCode(s)} · ${s.district} · ${s.sector}`}
+          action={<Btn onClick={() => openEdit(s)}>Edit profile</Btn>} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22 }}>
+          <StatCard label="Students" value={stu} sub={`${s.students_boys || 0}M · ${s.students_girls || 0}F`} accent="blue" />
+          <StatCard label="Teachers" value={tea} accent="green" />
+          <StatCard label="Infrastructure" value={`${infra}%`} accent="purple" />
+          <StatCard label="Connectivity" value={connectivityLabel(s)} accent="cyan" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <Card><CardHeader title="School details" /><CardBody>
+            {[
+              ['Type', s.school_type], ['Ownership', s.ownership], ['Status', s.status],
+              ['Classrooms', s.classrooms], ['Textbooks', s.textbooks], ['Desks', s.desks],
+              ['GPS', s.gps_verified ? 'Verified' : 'Pending'],
+            ].map(([l, v]) => (
+              <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                <span style={{ color: 'var(--text2)' }}>{l}</span><strong>{v ?? '—'}</strong>
+              </div>
+            ))}
+          </CardBody></Card>
+          <Card><CardHeader title="Facilities" /><CardBody>
+            {[
+              { l: 'Water', v: s.has_water }, { l: 'Electricity', v: s.has_electricity },
+              { l: 'Library', v: s.has_library }, { l: 'ICT Lab', v: s.has_ict_lab },
+              { l: 'Internet', v: s.has_internet },
+            ].map(({ l, v }) => (
+              <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
+                <span>{l}</span><Badge status={v ? 'good' : 'critical'} label={v ? 'Yes' : 'No'} />
+              </div>
+            ))}
+          </CardBody></Card>
+        </div>
+        {(editS || addOpen) && (
+          <Modal open width={640} onClose={() => { setEditS(null); setAddOpen(false) }} title={`Edit — ${s.name}`}>
+            <SchoolFormFields form={form} setForm={setForm} lockDistrict />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <Btn variant="outline" onClick={() => setEditS(null)}>Cancel</Btn>
+              <Btn onClick={saveSchool} disabled={updateM.isPending}>{updateM.isPending ? 'Saving...' : 'Save'}</Btn>
+            </div>
+          </Modal>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -172,25 +238,55 @@ export function SchoolsPage() {
           <option value="">All Types</option>
           {['Primary','Secondary'].map(t=><option key={t}>{t}</option>)}
         </select>
-        <Tabs tabs={[{id:'list',label:'List'},{id:'cards',label:'Cards'}]} active={view} onChange={setView}/>
+        {showMapToggle && (
+          <div style={{ marginLeft: 'auto' }}>
+            <IconToggleGroup
+              active={view}
+              onChange={setView}
+              tabs={[
+                { id: 'list', icon: List, title: 'List' },
+                { id: 'cards', icon: LayoutGrid, title: 'Tiles' },
+                { id: 'map', icon: Map, title: 'Map' },
+              ]}
+            />
+          </div>
+        )}
+        {!showMapToggle && user?.role !== 'school' && (
+          <div style={{ marginLeft: 'auto' }}>
+            <IconToggleGroup
+              active={view}
+              onChange={setView}
+              tabs={[
+                { id: 'list', icon: List, title: 'List' },
+                { id: 'cards', icon: LayoutGrid, title: 'Tiles' },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       {view==='list'&&(
         <Card><CardBody>
           <Table loading={isLoading} columns={[
+            {key:'school_code',label:'Code',render:(v,r)=><span style={{fontFamily:'monospace',fontSize:12}}>{schoolCode(r)}</span>},
             {key:'name',label:'School',render:v=><strong>{v}</strong>},
             {key:'district',label:'District'},{key:'sector',label:'Sector'},
             {key:'school_type',label:'Type',render:v=><Badge status={v}/>},
-            {key:'students_boys',label:'Students',render:(v,r)=>((r.students_boys||0)+(r.students_girls||0)).toLocaleString()},
-            {key:'teachers_male',label:'Teachers',render:(v,r)=>(r.teachers_male||0)+(r.teachers_female||0)},
-            {key:'gps_verified',label:'GPS',render:v=><Badge status={v?'good':'pending'} label={v?'✓ Verified':'Pending'}/>},
+            {key:'total_students',label:'Students',render:(v,r)=>totalStudents(r).toLocaleString()},
+            {key:'infrastructure_score',label:'Infrastructure',render:(v,r)=>{
+              const pct = infrastructureScore(r)
+              return <span style={{fontWeight:700,color:scoreColor(pct)}}>{pct}%</span>
+            }},
+            {key:'connectivity_label',label:'Connectivity',render:(v,r)=><Badge status={connectivityBadgeStatus(connectivityLabel(r))} label={connectivityLabel(r)}/>},
             {key:'status',label:'Status',render:v=><Badge status={v}/>},
-            {key:'id',label:'Actions',render:(v,row)=>(
-              <div style={{display:'flex',gap:5}}>
-                <Btn size="sm" variant="ghost" onClick={()=>setDetailS(row)}>View</Btn>
-                {canEditSchool(row)&&<Btn size="sm" variant="outline" onClick={()=>openEdit(row)}>Edit</Btn>}
-                {canDel&&<Btn size="sm" variant="danger" onClick={()=>{if(confirm('Delete?'))deleteM.mutate(v)}}>Del</Btn>}
-              </div>
+            {key:'id',label:'',render:(v,row)=>(
+              <IconActions
+                onView={() => setDetailS(row)}
+                onEdit={canEditSchool(row) ? () => openEdit(row) : undefined}
+                onDelete={canDel ? () => { if (confirm('Delete?')) deleteM.mutate(v) } : undefined}
+                showEdit={canEditSchool(row)}
+                showDelete={canDel}
+              />
             )},
           ]} data={schools} empty="No schools found"/>
           <Pagination page={page} totalPages={schoolPages} totalItems={schoolTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
@@ -211,8 +307,12 @@ export function SchoolsPage() {
                 onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='var(--sh-sm)'}}>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
                   <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{s.district} · {s.sector}</div></div>
+                    <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{schoolCode(s)} · {s.district} · {s.sector}</div></div>
                   <Badge status={s.status}/>
+                </div>
+                <div style={{display:'flex',gap:8,marginBottom:10,fontSize:12}}>
+                  <span style={{fontWeight:700,color:scoreColor(infrastructureScore(s))}}>{infrastructureScore(s)}% infra</span>
+                  <Badge status={connectivityBadgeStatus(connectivityLabel(s))} label={connectivityLabel(s)}/>
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
                   {[
@@ -246,6 +346,17 @@ export function SchoolsPage() {
           })}
           <Pagination page={page} totalPages={schoolPages} totalItems={schoolTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
+      )}
+
+      {view==='map'&&showMapToggle&&(
+        <Card><CardBody>
+          <GISMap
+            schools={mapSchools}
+            filterDistrict={lockDistrict ? user?.district : fd || undefined}
+            height={480}
+            onSchoolClick={s => setDetailS(s)}
+          />
+        </CardBody></Card>
       )}
 
       {/* Detail Modal */}
@@ -331,9 +442,10 @@ export function SchoolsPage() {
 export function TeachersPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const isSchoolHead = user?.role === 'school'
   const [searchParams, setSearchParams] = useSearchParams()
   const q = searchParams.get('q') || ''
-  const [schoolFilter, setSchoolFilter] = useState(user?.school_id||'')
+  const [schoolFilter, setSchoolFilter] = useState(user?.school_id ? String(user.school_id) : '')
   const [statusFilter, setStatusFilter] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [editT, setEditT] = useState(null)
@@ -357,6 +469,15 @@ export function TeachersPage() {
   const teachers = teacherPage.items
   const teacherTotal = teacherPage.total
   const teacherPages = calcTotalPages(teacherTotal)
+  const coverageParams = {
+    school_id: isSchoolHead ? user?.school_id : (schoolFilter ? Number(schoolFilter) : undefined),
+    district: user?.role === 'district' ? user?.district : undefined,
+  }
+  const { data: coverage = {} } = useQuery({
+    queryKey: ['teacher-coverage', coverageParams.school_id, coverageParams.district],
+    queryFn: () => analyticsAPI.teacherCoverage(coverageParams).then(r => r.data),
+    enabled: isSchoolHead ? !!user?.school_id : true,
+  })
   const { data: workload=[] } = useQuery({
     queryKey:['workload'],
     queryFn:()=>teachersAPI.workload({}).then(r=>r.data)
@@ -378,6 +499,14 @@ export function TeachersPage() {
   const qualData = ['A2','A1','A0','Masters','PhD'].map(q=>({name:q,value:teachers.filter(t=>t.qualification===q).length})).filter(d=>d.value>0)
   const COLORS = ['#2563EB','#10B981','#F59E0B','#8B5CF6','#EF4444']
   const canEdit = ['district','school'].includes(user?.role)
+  const subjectList = coverage.subjects || []
+  const schoolStu = coverage.students ?? 0
+  const schoolTea = coverage.total_teachers ?? teacherTotal
+  const ptRatio = coverage.pupil_teacher_ratio != null ? coverage.pupil_teacher_ratio : '—'
+  const coveragePct = schoolTea ? Math.round((coverage.active_teachers || 0) / schoolTea * 100) : 0
+  const criticalShortages = subjectList.filter(s => s.count === 0).length
+  const teacherCode = id => `TCH-${String(id).padStart(3, '0')}`
+  const expYears = y => Math.max(0, new Date().getFullYear() - (y || new Date().getFullYear()))
 
   const TeacherForm = () => (
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
@@ -394,29 +523,63 @@ export function TeachersPage() {
     </div>
   )
 
+  if (isSchoolHead && !user?.school_id) {
+    return (
+      <div>
+        <PageHeader title="Teacher Registry" sub="Manage your school staff" />
+        <SchoolEmptyState />
+      </div>
+    )
+  }
+
   return (
     <div>
-      <PageHeader title="Teacher Management"
-        sub={`${teacherTotal} teachers · page ${page} of ${teacherPages}`}
-        action={canEdit&&<Btn onClick={()=>setAddOpen(true)}>+ Add Teacher</Btn>}/>
+      <PageHeader title={isSchoolHead ? 'Teacher Registry' : 'Teacher Management'}
+        sub={isSchoolHead ? `${teacherTotal} teachers registered` : `${teacherTotal} teachers · page ${page} of ${teacherPages}`}
+        action={canEdit&&<Btn onClick={()=>{
+          if (isSchoolHead) setForm(p=>({...p,school_id:user.school_id}))
+          setAddOpen(true)
+        }}>+ Add Teacher</Btn>}/>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
-        <StatCard label="Total"    value={teacherTotal} sub="In roster" accent="blue" icon={Users}/>
-        <StatCard label="Active"   value={teachers.filter(t=>t.status==='Active').length}  sub="On this page"  accent="green"/>
-        <StatCard label="Absent"   value={teachers.filter(t=>t.status==='Absent').length}  sub="On this page"  accent="red" trend="down"/>
-        <StatCard label="Overloaded Schools" value={workload.filter(w=>w.overloaded).length} sub="P:T ratio > 1:50" accent="amber" trend="down"/>
+        {isSchoolHead ? (<>
+          <StatCard label="Total Teachers" value={teacherTotal} sub="Registered" accent="blue" icon={Users}/>
+          <StatCard label="Student-Teacher Ratio" value={`1:${ptRatio}`} sub={Number(ptRatio)<=50?'Within target':'Above target'} accent="green"/>
+          <StatCard label="Active Staff" value={`${coveragePct}%`} sub={`${coverage.active_teachers || 0} of ${schoolTea} active`} accent="green"/>
+          <StatCard label="Subjects" value={subjectList.length} sub="From teacher records" accent="cyan"/>
+        </>) : (<>
+          <StatCard label="Total"    value={teacherTotal} sub="In roster" accent="blue" icon={Users}/>
+          <StatCard label="Active"   value={teachers.filter(t=>t.status==='Active').length}  sub="On this page"  accent="green"/>
+          <StatCard label="Absent"   value={teachers.filter(t=>t.status==='Absent').length}  sub="On this page"  accent="red" trend="down"/>
+          <StatCard label="Overloaded Schools" value={workload.filter(w=>w.overloaded).length} sub="P:T ratio > 1:50" accent="amber" trend="down"/>
+        </>)}
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:18,marginBottom:18}}>
+      {subjectList.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', alignSelf: 'center' }}>Subjects (database):</span>
+          {subjectList.map(({ subject, count }) => (
+            <span key={subject} style={{
+              padding: '4px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 600,
+              background: count > 0 ? '#ECFDF5' : '#FEF2F2',
+              color: count > 0 ? '#059669' : '#DC2626',
+            }}>
+              {subject}: {count}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{display:'grid',gridTemplateColumns: isSchoolHead ? '1fr' : '2fr 1fr',gap:18,marginBottom:18}}>
         <Card>
           <CardHeader title="Teacher Roster"
             action={
               <div style={{display:'flex',gap:8}}>
-                <select value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)}
+                {!isSchoolHead && <select value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)}
                   style={{padding:'6px 10px',border:'1.5px solid var(--border)',borderRadius:8,fontSize:12,background:'#fff'}}>
                   <option value="">All Schools</option>
                   {schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                </select>}
                 <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
                   style={{padding:'6px 10px',border:'1.5px solid var(--border)',borderRadius:8,fontSize:12,background:'#fff'}}>
                   <option value="">All</option>
@@ -426,24 +589,24 @@ export function TeachersPage() {
             }/>
           <CardBody>
             <Table loading={isLoading} columns={[
-              {key:'full_name',label:'Name',render:v=><strong>{v}</strong>},
-              {key:'gender',label:'Gender'},
-              {key:'subject',label:'Subject'},
-              {key:'qualification',label:'Qual.',render:v=><Badge status="reviewed" label={v}/>},
-              {key:'employment_type',label:'Type',render:v=><Badge status="info" label={v}/>},
-              {key:'join_year',label:'Since'},
+              {key:'id',label:'Teacher',render:(v,r)=><div><strong>{r.full_name}</strong><div style={{fontSize:11,color:'var(--text3)',fontFamily:'monospace'}}>{teacherCode(v)}</div></div>},
+              ...(!isSchoolHead ? [{key:'school_id',label:'School',render:v=>schoolById[v]?.name||'—'}] : []),
+              {key:'subject',label:'Subjects',render:v=><Badge status="reviewed" label={v}/>},
+              {key:'qualification',label:'Qualification',render:v=><Badge status="reviewed" label={v}/>},
+              {key:'join_year',label:'Experience',render:v=>`${expYears(v)} yrs`},
               {key:'status',label:'Status',render:v=><Badge status={v}/>},
               {key:'id',label:'',render:(v,row)=>canEdit&&(
-                <div style={{display:'flex',gap:5}}>
-                  <Btn size="sm" variant="outline" onClick={()=>{setForm({...row});setEditT(row)}}>Edit</Btn>
-                  <Btn size="sm" variant="danger" onClick={()=>{if(confirm('Remove?'))delM.mutate(v)}}>Del</Btn>
-                </div>
+                <IconActions
+                  showView={false}
+                  onEdit={() => { setForm({ ...row }); setEditT(row) }}
+                  onDelete={() => { if (confirm('Remove?')) delM.mutate(v) }}
+                />
               )},
             ]} data={teachers}/>
             <Pagination page={page} totalPages={teacherPages} totalItems={teacherTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
           </CardBody>
         </Card>
-        <div style={{display:'flex',flexDirection:'column',gap:18}}>
+        {!isSchoolHead && <div style={{display:'flex',flexDirection:'column',gap:18}}>
           <Card><CardHeader title="By Qualification"/><CardBody>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart><Pie data={qualData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65}
@@ -461,7 +624,7 @@ export function TeachersPage() {
             ))}
             {workload.filter(w=>w.overloaded).length===0&&<Empty icon="✅" title="No overloaded schools"/>}
           </CardBody></Card>
-        </div>
+        </div>}
       </div>
 
       {(addOpen||editT)&&(
@@ -483,11 +646,28 @@ export function TeachersPage() {
 // ════════════════════════════════════════════════════════════════════
 // FEEDBACK PAGE
 // ════════════════════════════════════════════════════════════════════
+const KANBAN_COLS = [
+  { id: 'pending', label: 'Pending', color: '#F59E0B' },
+  { id: 'reviewed', label: 'In Review', color: '#2563EB' },
+  { id: 'resolved', label: 'Resolved', color: '#10B981' },
+  { id: 'closed', label: 'Closed', color: '#64748B' },
+]
+
+const CASE_KANBAN = [
+  { id: 'pending', label: 'New', color: '#2563EB' },
+  { id: 'reviewed', label: 'In Review', color: '#8B5CF6' },
+  { id: 'assigned', label: 'Assigned', color: '#F59E0B', match: f => f.status === 'reviewed' && !!f.reviewer_note },
+  { id: 'resolved', label: 'Resolved', color: '#10B981' },
+  { id: 'closed', label: 'Closed', color: '#64748B' },
+]
+
 export function FeedbackPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const isSchoolHead = user?.role === 'school'
   const [statusF, setStatusF] = useState('')
   const [typeF, setTypeF] = useState('')
+  const [layout, setLayout] = useState(isSchoolHead ? 'board' : 'list')
   const [submitOpen, setSubmitOpen] = useState(false)
   const [threadOpen, setThreadOpen] = useState(false)
   const [threadRow, setThreadRow] = useState(null)
@@ -512,6 +692,12 @@ export function FeedbackPage() {
   const feedback = fbPage.items
   const fbTotal = fbPage.total
   const fbPages = calcTotalPages(fbTotal)
+  const canReview = ['reb','district'].includes(user?.role)
+  const { data: boardItems = [], isLoading: boardLoading } = useQuery({
+    queryKey: ['feedback-board', typeF, user?.role],
+    queryFn: () => feedbackAPI.list({ issue_type: typeF || undefined, limit: 200 }).then(r => r.data),
+    enabled: layout === 'board' && (canReview || isSchoolHead),
+  })
   const { data: schools=[] } = useQuery({
     queryKey:['schools-fb'],
     queryFn:()=>schoolsAPI.list({}).then(r=>r.data),
@@ -563,7 +749,6 @@ export function FeedbackPage() {
     onError:e=>toast.error(e.response?.data?.detail||'Submit failed'),
   })
 
-  const canReview = ['reb','district'].includes(user?.role)
   const canSubmit = ['community','school'].includes(user?.role)
   const canMessage = ['reb','district','community','school'].includes(user?.role)
   const pending = feedback.filter(f=>f.status==='pending').length
@@ -588,27 +773,53 @@ export function FeedbackPage() {
   }
 
   const title = user?.role === 'community' ? 'My Reports'
-    : user?.role === 'school' ? 'My Issues'
+    : isSchoolHead ? 'Case Management'
     : user?.role === 'reb' ? 'Forwarded Issues'
     : 'Feedback & Community Reports'
+
+  const boardCols = isSchoolHead || canReview ? CASE_KANBAN : KANBAN_COLS
+  const boardMatch = (col, card) => {
+    if (col.match) return col.match(card)
+    if (col.id === 'reviewed' && isSchoolHead) return card.status === 'reviewed' && !card.reviewer_note
+    return card.status === col.id
+  }
+
+  if (isSchoolHead && !user?.school_id) {
+    return (
+      <div>
+        <PageHeader title="Case Management" sub="Manage community feedback and issue reports" />
+        <SchoolEmptyState />
+      </div>
+    )
+  }
 
   return (
     <div>
       <PageHeader title={title}
-        sub={`${fbTotal} issues · page ${page} of ${fbPages}${pending ? ` · ${pending} pending on page` : ''}`}
-        action={canSubmit ? <Btn onClick={()=>setSubmitOpen(true)}>+ Submit Report</Btn> : null}/>
+        sub={isSchoolHead ? 'Manage community feedback and issue reports' : `${fbTotal} issues · page ${page} of ${fbPages}${pending ? ` · ${pending} pending on page` : ''}`}
+        action={canSubmit ? <Btn onClick={()=>{
+          if (isSchoolHead && user?.school_id) setForm(p=>({...p,school_id:user.school_id}))
+          setSubmitOpen(true)
+        }}>+ Submit Report</Btn> : null}/>
 
       {pending>0&&canReview&&<Alert type="warning"><strong>{pending} reports</strong> are pending review.</Alert>}
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
-        <StatCard label="Pending"  value={feedback.filter(f=>f.status==='pending').length}  sub="Awaiting review" accent="amber"/>
-        <StatCard label="Reviewed" value={feedback.filter(f=>f.status==='reviewed').length} sub="In progress" accent="blue"/>
-        <StatCard label="Resolved" value={feedback.filter(f=>f.status==='resolved').length} sub="Action taken" accent="green"/>
-        <StatCard label="Closed"   value={feedback.filter(f=>f.status==='closed').length}   sub="No action possible" accent="cyan"/>
+        {isSchoolHead ? (<>
+          <StatCard label="New Cases" value={boardItems.filter(f=>f.status==='pending').length} sub="Awaiting review" accent="blue"/>
+          <StatCard label="Critical" value={boardItems.filter(f=>f.issue_type==='Infrastructure').length} sub="Infrastructure issues" accent="red"/>
+          <StatCard label="In Progress" value={boardItems.filter(f=>f.status==='reviewed').length} sub="Being handled" accent="amber"/>
+          <StatCard label="Resolved" value={boardItems.filter(f=>f.status==='resolved').length} sub="Action taken" accent="green"/>
+        </>) : (<>
+          <StatCard label="Pending"  value={feedback.filter(f=>f.status==='pending').length}  sub="Awaiting review" accent="amber"/>
+          <StatCard label="Reviewed" value={feedback.filter(f=>f.status==='reviewed').length} sub="In progress" accent="blue"/>
+          <StatCard label="Resolved" value={feedback.filter(f=>f.status==='resolved').length} sub="Action taken" accent="green"/>
+          <StatCard label="Closed"   value={feedback.filter(f=>f.status==='closed').length}   sub="No action possible" accent="cyan"/>
+        </>)}
       </div>
 
-      <div style={{display:'flex',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        {['','pending','reviewed','resolved','closed'].map(s=>(
+      <div style={{display:'flex',gap:10,marginBottom:18,flexWrap:'wrap',alignItems:'center'}}>
+        {layout === 'list' && ['','pending','reviewed','resolved','closed'].map(s=>(
           <button key={s} onClick={()=>setStatusF(s)}
             style={{padding:'6px 14px',borderRadius:8,fontSize:12.5,fontWeight:600,cursor:'pointer',
               border:`1.5px solid ${statusF===s?'var(--blue)':'var(--border)'}`,
@@ -617,9 +828,49 @@ export function FeedbackPage() {
             {s||'All Statuses'}
           </button>
         ))}
+        {(canReview || isSchoolHead) && (
+          <div style={{ marginLeft: layout === 'list' ? 'auto' : undefined }}>
+            <Tabs tabs={[{ id: 'list', label: 'Table' }, { id: 'board', label: 'Board' }]} active={layout} onChange={setLayout}/>
+          </div>
+        )}
       </div>
 
-      <Card><CardBody>
+      {layout === 'board' && (canReview || isSchoolHead) && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${boardCols.length}, 1fr)`, gap: 14, marginBottom: 18, minHeight: 320, overflowX: 'auto' }}>
+          {boardCols.map(col => {
+            const cards = boardItems.filter(f => boardMatch(col, f))
+            return (
+              <div key={col.id} style={{ background: 'var(--bg2)', borderRadius: 12, padding: 12, border: '1px solid var(--border)' }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: col.color }}>
+                  {col.label} <span style={{ color: 'var(--text3)' }}>({cards.length})</span>
+                </div>
+                {boardLoading && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading...</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 480, overflowY: 'auto' }}>
+                  {cards.map(card => (
+                    <button
+                      key={card.id}
+                      type="button"
+                      onClick={() => openThread(card)}
+                      style={{
+                        textAlign: 'left', padding: 12, borderRadius: 10, border: '1px solid var(--border)',
+                        background: 'var(--card)', cursor: 'pointer', boxShadow: 'var(--sh-sm)',
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, lineHeight: 1.4 }}>
+                        {card.description?.length > 80 ? card.description.slice(0, 80) + '…' : card.description}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text2)' }}>{card.school_name || '—'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>{card.created_at?.slice(0, 10)}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {layout === 'list' && <Card><CardBody>
         <Table loading={isLoading} columns={[
           {key:'description',label:'Issue',render:v=><span style={{fontSize:12}}>{v?.length>75?v.slice(0,75)+'…':v}</span>},
           {key:'issue_type',label:'Type',render:v=><Badge status="reviewed" label={formatLabel(v)}/>},
@@ -632,7 +883,7 @@ export function FeedbackPage() {
           )},
         ]} data={feedback} empty="No feedback found"/>
         <Pagination page={page} totalPages={fbPages} totalItems={fbTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
-      </CardBody></Card>
+      </CardBody></Card>}
 
       <Modal open={threadOpen} onClose={()=>{setThreadOpen(false);setThreadRow(null)}} width={640}
         title={threadRow ? `Issue #${threadRow.id} · ${formatLabel(threadRow.status)}` : 'Issue thread'}>
@@ -932,77 +1183,6 @@ export function AnalyticsPage() {
           ))}
         </CardBody></Card>
       </div>
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════
-// USERS PAGE
-// ════════════════════════════════════════════════════════════════════
-export function UsersPage() {
-  const qc = useQueryClient()
-  const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState({full_name:'',email:'',password:'',role:'district',district:'Gasabo',school_id:null})
-  const { data: users=[], isLoading } = useQuery({ queryKey:['users'], queryFn:()=>usersAPI.list().then(r=>r.data) })
-
-  const addM = useMutation({ mutationFn:d=>usersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['users']); setAddOpen(false); toast.success('User created') }, onError: apiErr })
-  const delM = useMutation({ mutationFn:id=>usersAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User removed') }, onError: apiErr })
-  const togM = useMutation({ mutationFn:({id,active})=>usersAPI.update(id,{is_active:active}), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User status updated') }, onError: apiErr })
-
-  const roleColors = {admin:'critical',reb:'reviewed',district:'pending',school:'good',enumerator:'info',community:'moderate'}
-  const set = k=>e=>setForm(p=>({...p,[k]:e.target.value}))
-
-  return (
-    <div>
-      <PageHeader title="User Management" sub={`${users.length} system users`}
-        action={<Btn onClick={()=>setAddOpen(true)}>+ Create User</Btn>}/>
-
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:22}}>
-        <StatCard label="Total Users"  value={users.length} sub="All roles" accent="blue"/>
-        <StatCard label="Active"       value={users.filter(u=>u.is_active).length}  sub="Can sign in" accent="green"/>
-        <StatCard label="Inactive"     value={users.filter(u=>!u.is_active).length} sub="Deactivated" accent="red" trend="down"/>
-      </div>
-
-      <Card><CardBody>
-        <Table loading={isLoading} columns={[
-          {key:'full_name',label:'User',render:(v,row)=>(
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <div style={{width:32,height:32,borderRadius:9,flexShrink:0,
-                background:'linear-gradient(135deg,#2563EB,#06B6D4)',
-                display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#fff'}}>
-                {v?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}
-              </div>
-              <div><strong>{v}</strong><div style={{fontSize:11,color:'var(--text2)'}}>{row.email}</div></div>
-            </div>
-          )},
-          {key:'role',label:'Role',render:v=><Badge status={roleColors[v]||'info'} label={v}/>},
-          {key:'district',label:'District'},
-          {key:'is_active',label:'Status',render:v=><Badge status={v?'good':'critical'} label={v?'Active':'Inactive'}/>},
-          {key:'created_at',label:'Created',render:v=>v?.slice(0,10)},
-          {key:'id',label:'Actions',render:(v,row)=>(
-            <div style={{display:'flex',gap:5}}>
-              <Btn size="sm" variant="outline" onClick={()=>togM.mutate({id:v,active:!row.is_active})}>
-                {row.is_active?'Deactivate':'Activate'}
-              </Btn>
-              <Btn size="sm" variant="danger" onClick={()=>{if(confirm('Remove?'))delM.mutate(v)}}>Remove</Btn>
-            </div>
-          )},
-        ]} data={users}/>
-      </CardBody></Card>
-
-      <Modal open={addOpen} onClose={()=>setAddOpen(false)} title="Create New User">
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-          <Field label="Full Name *"><Input placeholder="e.g. Uwimana Alice" value={form.full_name} onChange={set('full_name')}/></Field>
-          <Field label="Email *"><Input type="email" placeholder="name@reb.rw" value={form.email} onChange={set('email')}/></Field>
-          <Field label="Password *"><Input type="password" placeholder="Min 8 chars" value={form.password} onChange={set('password')}/></Field>
-          <Field label="Role"><Select options={['admin','reb','district','school','enumerator','community']} value={form.role} onChange={set('role')}/></Field>
-          <Field label="District"><Select options={['National', ...DISTRICT_NAMES]} value={form.district} onChange={set('district')}/></Field>
-        </div>
-        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:20}}>
-          <Btn variant="outline" onClick={()=>setAddOpen(false)}>Cancel</Btn>
-          <Btn onClick={()=>addM.mutate(form)} disabled={addM.isPending}>{addM.isPending?'Creating...':'Create User'}</Btn>
-        </div>
-      </Modal>
     </div>
   )
 }

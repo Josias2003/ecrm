@@ -399,6 +399,37 @@ export const Tabs = ({tabs,active,onChange}) => (
   </div>
 )
 
+export const IconToggleGroup = ({ tabs, active, onChange, style }) => (
+  <div style={{
+    display: 'flex', gap: 3, background: '#F1F5F9', padding: 4,
+    borderRadius: 12, width: 'fit-content', ...style,
+  }}>
+    {tabs.map(t => {
+      const Icon = t.icon
+      const on = active === t.id
+      return (
+        <button
+          key={t.id}
+          type="button"
+          title={t.title || t.id}
+          aria-label={t.title || t.id}
+          onClick={() => onChange(t.id)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 32, borderRadius: 8, cursor: 'pointer', border: 'none',
+            transition: 'all .15s',
+            background: on ? '#fff' : 'transparent',
+            color: on ? '#0F172A' : '#64748B',
+            boxShadow: on ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+          }}
+        >
+          <Icon size={17} strokeWidth={on ? 2.25 : 2} />
+        </button>
+      )
+    })}
+  </div>
+)
+
 /* ── ALERT BANNER ──────────────────────────────────────────────── */
 export const Alert = ({type='info',children,onClose, toast = false}) => {
   const M = {

@@ -49,7 +49,9 @@ export const metaAPI = {
 }
 
 export const usersAPI = {
-  list: (skip = 0, limit = 500) => client.get('/api/users/', { params: { skip, limit } }),
+  list: (skip = 0, limit = 500, params = {}) =>
+    client.get('/api/users/', { params: { skip, limit, ...params } }),
+  assignmentGaps: () => client.get('/api/users/assignment-gaps'),
   create: (data) => client.post('/api/users/', data),
   update: (id, data) => client.patch(`/api/users/${id}`, data),
   delete: (id) => client.delete(`/api/users/${id}`),
@@ -102,6 +104,8 @@ export const analyticsAPI = {
   trends: (params) => client.get('/api/analytics/enrollment-trends', { params }),
   gisSummary: () => client.get('/api/analytics/gis-summary'),
   riskScores: (params) => client.get('/api/analytics/risk-scores', { params }),
+  resourceInventory: (params) => client.get('/api/analytics/resource-inventory', { params }),
+  teacherCoverage: (params) => client.get('/api/analytics/teacher-coverage', { params }),
 }
 
 export const logsAPI = {

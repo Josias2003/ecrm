@@ -207,6 +207,19 @@ def seed():
         dict(full_name="Ingabire Rose",   email="rose@reb.rw",             password="Field@1234",   role="enumerator", district="Kicukiro",   school_id=None),
         dict(full_name="Mukeza David",    email="david@gmail.com",         password="Comm@1234",    role="community",  district="Gasabo",     school_id=None),
     ]
+    assigned_districts = {u["district"] for u in users_data if u["role"] == "district"}
+    for dist_name in DISTRICT_NAMES:
+        if dist_name in assigned_districts:
+            continue
+        slug = dist_name.lower().replace(" ", "").replace("'", "")
+        users_data.append(dict(
+            full_name=f"{dist_name} District Officer",
+            email=f"officer.{slug}@district.gov.rw",
+            password="District@1",
+            role="district",
+            district=dist_name,
+            school_id=None,
+        ))
     for u in users_data:
         db.add(User(full_name=u["full_name"], email=u["email"],
                     hashed_password=hash_password(u["password"]),

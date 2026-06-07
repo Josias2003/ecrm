@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_roles, get_client_ip
 from app.models.models import School, Teacher, ResourceAlert, AuditLog, StatusEnum
 from app.schemas.schemas import SchoolOut, SchoolCreate, SchoolUpdate
+from app.services.school_serialize import serialize_school
 
 schools_router = APIRouter(prefix="/api/schools", tags=["Schools"])
 
@@ -109,7 +110,8 @@ def list_schools(district: Optional[str]=Query(None), status: Optional[str]=Quer
                  skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=1000),
                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
     q = _schools_query(db, cu, district, status, school_type, gps_verified)
-    return q.order_by(School.district, School.name).offset(skip).limit(limit).all()
+    rows = q.order_by(School.district, School.name).offset(skip).limit(limit).all()
+    return [serialize_school(s) for s in rows]
 
 @schools_router.post("/", response_model=SchoolOut, status_code=201)
 def create_school(payload: SchoolCreate, request: Request, db: Session = Depends(get_db),
@@ -125,7 +127,7 @@ def create_school(payload: SchoolCreate, request: Request, db: Session = Depends
     log_action(db, cu.id, "CREATE", f"Registered school: {payload.name}", "School", ip_address=ip)
     db.commit()
     db.refresh(s)
-    return s
+    return serialize_school(s)
 
 @schools_router.get("/{sid}", response_model=SchoolOut)
 def get_school(sid: int, db: Session = Depends(get_db), cu=Depends(get_current_user)):
@@ -140,7 +142,7 @@ def get_school(sid: int, db: Session = Depends(get_db), cu=Depends(get_current_u
     if cu.role in ["district", "enumerator", "community"] and cu.district and cu.district != "National":
         if s.district != cu.district:
             raise HTTPException(403, "Access denied for this district")
-    return s
+    return serialize_school(s)
 
 @schools_router.patch("/{sid}", response_model=SchoolOut)
 def update_school(sid: int, payload: SchoolUpdate, request: Request, db: Session = Depends(get_db),
@@ -157,7 +159,7 @@ def update_school(sid: int, payload: SchoolUpdate, request: Request, db: Session
     log_action(db, cu.id, "UPDATE", f"Updated school: {s.name}", "School", sid, ip_address=ip)
     db.commit()
     db.refresh(s)
-    return s
+    return serialize_school(s)
 
 @schools_router.patch("/{sid}/verify-gps")
 def verify_gps(sid: int, request: Request, db: Session = Depends(get_db),
