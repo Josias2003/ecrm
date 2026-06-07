@@ -1,6 +1,5 @@
 # ECRM — Education Community Resource Mapping
 ## Rwanda · Full-Stack Web Application
-### Final Year Project — Bachelor of Science in Computer Science
 
 ---
 
