@@ -104,6 +104,27 @@ App: http://localhost:5173 (landing page at `/`, not `/login`)
 
 ---
 
+## IMPLEMENTED FEATURES BY ROLE (Use Case Diagram)
+
+Mapped to the project requirements and UML use cases.
+
+| Use case (diagram) | REB | District | School Head | Community | Also in system |
+|--------------------|:---:|:--------:|:-----------:|:---------:|:--------------:|
+| Login to System | ✅ | ✅ | ✅ | ✅ | Admin, Enumerator |
+| View Dashboard | ✅ | ✅ | ✅ | — | All roles |
+| Register & Map School (GPS) | View | ✅ | Edit own | — | Enumerator |
+| Manage Resource Inventory | View | ✅ | ✅ own school | — | Auto gap alerts |
+| Manage Teachers & Staff | View | ✅ | ✅ own school | — | Workload analysis |
+| Submit Updates | — | — | ✅ | — | School form + GPS |
+| Analyze Resource Gaps | ✅ | ✅ | — | — | Analytics + risk scores |
+| Generate Reports | ✅ PDF | ✅ PDF | ✅ PDF | ✅ PDF | Live preview |
+| Submit Community Feedback | — | Review | ✅ submit | ✅ | Issue threads |
+| Team Chat | ✅ | ✅ | Limited | — | Reply-to-message |
+
+**Pagination:** Schools, Teachers, Feedback, and Alerts lists show **20 records per page** with Previous/Next controls (no long scroll through 300+ rows).
+
+---
+
 ## MODULE 0 — LANDING PAGE & SIGN IN
 
 #### TC-000: Landing Page Loads at Root

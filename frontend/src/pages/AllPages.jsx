@@ -7,7 +7,8 @@ import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, usersAPI
 import { useAuth } from '../store/auth'
 import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, Table,
          Modal, Field, Input, Select, Textarea, Tabs, Empty, PageHeader,
-         ProgressBar, DonutChart, Checkbox } from '../components/UI'
+         ProgressBar, DonutChart, Checkbox, Pagination } from '../components/UI'
+import { PAGE_SIZE, pageSlice, totalPages as calcTotalPages } from '../utils/pagination'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
          CartesianGrid, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts'
 import {
@@ -23,6 +24,19 @@ const apiErr = (e) => toast.error(
     ? e.response.data.detail
     : 'Action failed — ensure the API server is running'
 )
+
+async function fetchPagedList({ listFn, countFn, params, page, searchQ, matchFields }) {
+  if (searchQ?.trim()) {
+    const all = (await listFn({ ...params, limit: 500 })).data
+    const filtered = all.filter(row => textMatches(searchQ, matchFields(row)))
+    return { items: pageSlice(filtered, page), total: filtered.length }
+  }
+  const [listRes, countRes] = await Promise.all([
+    listFn({ ...params, skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE }),
+    countFn(params),
+  ])
+  return { items: listRes.data, total: countRes.data.total }
+}
 
 const textMatches = (query, values) => {
   const q = query.trim().toLowerCase()
@@ -55,14 +69,25 @@ export function SchoolsPage() {
   const [editS, setEditS] = useState(null)
   const [detailS, setDetailS] = useState(null)
   const [form, setForm] = useState(EMPTY_SCHOOL)
+  const [page, setPage] = useState(1)
 
-  const { data: schools=[], isLoading } = useQuery({
-    queryKey:['schools',fd,fs,ft],
-    queryFn:()=>schoolsAPI.list({district:fd||undefined,status:fs||undefined,school_type:ft||undefined}).then(r=>r.data)
+  useEffect(() => { setPage(1) }, [fd, fs, ft, q])
+
+  const listParams = { district: fd || undefined, status: fs || undefined, school_type: ft || undefined }
+  const { data: schoolPage = { items: [], total: 0 }, isLoading } = useQuery({
+    queryKey: ['schools', fd, fs, ft, page, q],
+    queryFn: () => fetchPagedList({
+      listFn: schoolsAPI.list,
+      countFn: schoolsAPI.count,
+      params: listParams,
+      page,
+      searchQ: q,
+      matchFields: s => [s.name, s.district, s.sector, s.school_type, s.ownership, s.status],
+    }),
   })
-  const visibleSchools = schools.filter(s => textMatches(q, [
-    s.name, s.district, s.sector, s.school_type, s.ownership, s.status,
-  ]))
+  const schools = schoolPage.items
+  const schoolTotal = schoolPage.total
+  const schoolPages = calcTotalPages(schoolTotal)
 
   const createM = useMutation({
     mutationFn: d => schoolsAPI.create(d),
@@ -122,7 +147,7 @@ export function SchoolsPage() {
   return (
     <div>
       <PageHeader title={user?.role==='school'?'My School':'Schools'}
-        sub={user?.role==='school'?'View and update your school profile':`${visibleSchools.length} schools found${q ? ` for "${q}"` : ''}`}
+        sub={user?.role==='school'?'View and update your school profile':`${schoolTotal} schools${q ? ` matching "${q}"` : ''} · page ${page} of ${schoolPages}`}
         action={<div style={{display:'flex',gap:10}}>
           {user?.role!=='school'&&<Btn variant="outline" onClick={exportCSV}><Download size={15}/> CSV</Btn>}
           {canEdit&&user?.role!=='school'&&<Btn onClick={openAdd}>+ Register School</Btn>}
@@ -167,13 +192,14 @@ export function SchoolsPage() {
                 {canDel&&<Btn size="sm" variant="danger" onClick={()=>{if(confirm('Delete?'))deleteM.mutate(v)}}>Del</Btn>}
               </div>
             )},
-          ]} data={visibleSchools} empty="No schools found"/>
+          ]} data={schools} empty="No schools found"/>
+          <Pagination page={page} totalPages={schoolPages} totalItems={schoolTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </CardBody></Card>
       )}
 
       {view==='cards'&&(
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14}}>
-          {visibleSchools.map(s=>{
+          {schools.map(s=>{
             const stu=(s.students_boys||0)+(s.students_girls||0)
             const tea=(s.teachers_male||0)+(s.teachers_female||0)
             return (
@@ -218,6 +244,7 @@ export function SchoolsPage() {
               </div>
             )
           })}
+          <Pagination page={page} totalPages={schoolPages} totalItems={schoolTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
       )}
 
@@ -311,21 +338,37 @@ export function TeachersPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editT, setEditT] = useState(null)
   const [form, setForm] = useState({school_id:'',full_name:'',gender:'Female',subject:'',qualification:'A1',employment_type:'Permanent',status:'Active',join_year:new Date().getFullYear(),phone:''})
+  const [page, setPage] = useState(1)
 
-  const { data: teachers=[], isLoading } = useQuery({
-    queryKey:['teachers',schoolFilter,statusFilter],
-    queryFn:()=>teachersAPI.list({school_id:schoolFilter||undefined,status:statusFilter||undefined}).then(r=>r.data)
+  useEffect(() => { setPage(1) }, [schoolFilter, statusFilter, q])
+
+  const teacherParams = { school_id: schoolFilter || undefined, status: statusFilter || undefined }
+  const { data: teacherPage = { items: [], total: 0 }, isLoading } = useQuery({
+    queryKey: ['teachers', schoolFilter, statusFilter, page, q],
+    queryFn: () => fetchPagedList({
+      listFn: teachersAPI.list,
+      countFn: teachersAPI.count,
+      params: teacherParams,
+      page,
+      searchQ: q,
+      matchFields: t => [t.full_name, t.gender, t.subject, t.qualification, t.employment_type, t.status, t.phone],
+    }),
   })
+  const teachers = teacherPage.items
+  const teacherTotal = teacherPage.total
+  const teacherPages = calcTotalPages(teacherTotal)
   const { data: workload=[] } = useQuery({
     queryKey:['workload'],
     queryFn:()=>teachersAPI.workload({}).then(r=>r.data)
   })
-  const { data: schools=[] } = useQuery({ queryKey:['schools-sel'], queryFn:()=>schoolsAPI.list({}).then(r=>r.data) })
+  const { data: schools=[] } = useQuery({
+    queryKey: ['schools-sel', user?.district],
+    queryFn: () => schoolsAPI.list({
+      district: user?.role === 'district' ? user.district : undefined,
+      limit: 500,
+    }).then(r => r.data),
+  })
   const schoolById = Object.fromEntries(schools.map(s => [s.id, s]))
-  const visibleTeachers = teachers.filter(t => textMatches(q, [
-    t.full_name, t.gender, t.subject, t.qualification, t.employment_type,
-    t.status, t.phone, schoolById[t.school_id]?.name,
-  ]))
 
   const addM = useMutation({ mutationFn:d=>teachersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setAddOpen(false); toast.success('Teacher added') }, onError: apiErr })
   const updM = useMutation({ mutationFn:({id,d})=>teachersAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setEditT(null); toast.success('Teacher updated') }, onError: apiErr })
@@ -354,13 +397,13 @@ export function TeachersPage() {
   return (
     <div>
       <PageHeader title="Teacher Management"
-        sub={`${teachers.length} teachers · ${teachers.filter(t=>t.status==='Active').length} active`}
+        sub={`${teacherTotal} teachers · page ${page} of ${teacherPages}`}
         action={canEdit&&<Btn onClick={()=>setAddOpen(true)}>+ Add Teacher</Btn>}/>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
-        <StatCard label="Total"    value={teachers.length} sub="Teachers" accent="blue" icon={Users}/>
-        <StatCard label="Active"   value={teachers.filter(t=>t.status==='Active').length}  sub="Currently active"  accent="green"/>
-        <StatCard label="Absent"   value={teachers.filter(t=>t.status==='Absent').length}  sub="Currently absent"  accent="red" trend="down"/>
+        <StatCard label="Total"    value={teacherTotal} sub="In roster" accent="blue" icon={Users}/>
+        <StatCard label="Active"   value={teachers.filter(t=>t.status==='Active').length}  sub="On this page"  accent="green"/>
+        <StatCard label="Absent"   value={teachers.filter(t=>t.status==='Absent').length}  sub="On this page"  accent="red" trend="down"/>
         <StatCard label="Overloaded Schools" value={workload.filter(w=>w.overloaded).length} sub="P:T ratio > 1:50" accent="amber" trend="down"/>
       </div>
 
@@ -397,6 +440,7 @@ export function TeachersPage() {
                 </div>
               )},
             ]} data={teachers}/>
+            <Pagination page={page} totalPages={teacherPages} totalItems={teacherTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
           </CardBody>
         </Card>
         <div style={{display:'flex',flexDirection:'column',gap:18}}>
@@ -450,11 +494,24 @@ export function FeedbackPage() {
   const [threadText, setThreadText] = useState('')
   const [actionNote, setActionNote] = useState('')
   const [form, setForm] = useState({school_id:'',issue_type:'Infrastructure',description:'',reporter_name:'',reporter_contact:''})
+  const [page, setPage] = useState(1)
 
-  const { data: feedback=[], isLoading } = useQuery({
-    queryKey:['feedback-all',statusF,typeF],
-    queryFn:()=>feedbackAPI.list({status:statusF||undefined,issue_type:typeF||undefined}).then(r=>r.data)
+  useEffect(() => { setPage(1) }, [statusF, typeF])
+
+  const fbParams = { status: statusF || undefined, issue_type: typeF || undefined }
+  const { data: fbPage = { items: [], total: 0 }, isLoading } = useQuery({
+    queryKey: ['feedback-all', statusF, typeF, page],
+    queryFn: async () => {
+      const [listRes, countRes] = await Promise.all([
+        feedbackAPI.list({ ...fbParams, skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE }),
+        feedbackAPI.count(fbParams),
+      ])
+      return { items: listRes.data, total: countRes.data.total }
+    },
   })
+  const feedback = fbPage.items
+  const fbTotal = fbPage.total
+  const fbPages = calcTotalPages(fbTotal)
   const { data: schools=[] } = useQuery({
     queryKey:['schools-fb'],
     queryFn:()=>schoolsAPI.list({}).then(r=>r.data),
@@ -538,7 +595,7 @@ export function FeedbackPage() {
   return (
     <div>
       <PageHeader title={title}
-        sub={`${feedback.length} total · ${pending} pending`}
+        sub={`${fbTotal} issues · page ${page} of ${fbPages}${pending ? ` · ${pending} pending on page` : ''}`}
         action={canSubmit ? <Btn onClick={()=>setSubmitOpen(true)}>+ Submit Report</Btn> : null}/>
 
       {pending>0&&canReview&&<Alert type="warning"><strong>{pending} reports</strong> are pending review.</Alert>}
@@ -574,6 +631,7 @@ export function FeedbackPage() {
             <Btn size="sm" variant="outline" onClick={()=>openThread(row)}>Open</Btn>
           )},
         ]} data={feedback} empty="No feedback found"/>
+        <Pagination page={page} totalPages={fbPages} totalItems={fbTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </CardBody></Card>
 
       <Modal open={threadOpen} onClose={()=>{setThreadOpen(false);setThreadRow(null)}} width={640}
@@ -675,11 +733,24 @@ export function AlertsPage() {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [resolveId, setResolveId] = useState(null)
   const [resolveNote, setResolveNote] = useState('')
+  const [page, setPage] = useState(1)
 
-  const { data: alerts=[], isLoading } = useQuery({
-    queryKey:['alerts-page',levelF,resolved],
-    queryFn:()=>alertsAPI.list({level:levelF||undefined,resolved}).then(r=>r.data)
+  useEffect(() => { setPage(1) }, [levelF, resolved])
+
+  const alertParams = { level: levelF || undefined, resolved }
+  const { data: alertPage = { items: [], total: 0 }, isLoading } = useQuery({
+    queryKey: ['alerts-page', levelF, resolved, page],
+    queryFn: async () => {
+      const [listRes, countRes] = await Promise.all([
+        alertsAPI.list({ ...alertParams, skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE }),
+        alertsAPI.count(alertParams),
+      ])
+      return { items: listRes.data, total: countRes.data.total }
+    },
   })
+  const alerts = alertPage.items
+  const alertTotal = alertPage.total
+  const alertPages = calcTotalPages(alertTotal)
 
   const resolveM = useMutation({
     mutationFn:({id,note})=>alertsAPI.resolve(id,{resolution_note:note}),
@@ -708,7 +779,7 @@ export function AlertsPage() {
 
   return (
     <div>
-      <PageHeader title={pageTitle} sub={`${alerts.length} shown · ${critical} critical`}/>
+      <PageHeader title={pageTitle} sub={`${alertTotal} alerts · page ${page} of ${alertPages} · ${critical} critical on page`}/>
 
       {critical>0&&<Alert type="danger"><strong>{critical} critical alerts</strong> require immediate action.</Alert>}
 
@@ -751,6 +822,7 @@ export function AlertsPage() {
             </div>
           )},
         ]} data={alerts} empty="No alerts found"/>
+        <Pagination page={page} totalPages={alertPages} totalItems={alertTotal} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </CardBody></Card>
 
       <Modal open={resolveOpen} onClose={()=>setResolveOpen(false)} title="Resolve Alert">

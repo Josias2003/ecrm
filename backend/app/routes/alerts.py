@@ -25,13 +25,7 @@ def _alert_out(a: ResourceAlert) -> AlertOut:
         created_at=a.created_at,
     )
 
-@alerts_router.get("/", response_model=List[AlertOut])
-def list_alerts(district: Optional[str]=Query(None),
-                school_id: Optional[int]=Query(None),
-                level: Optional[str]=Query(None),
-                resolved: Optional[bool]=Query(False),
-                skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
-                db: Session = Depends(get_db), cu=Depends(get_current_user)):
+def _alerts_list_query(db, cu, district=None, school_id=None, level=None, resolved=False):
     q = db.query(ResourceAlert).join(School)
     if cu.role == "district" and cu.district:
         q = q.filter(School.district == cu.district)
@@ -42,14 +36,36 @@ def list_alerts(district: Optional[str]=Query(None),
     if cu.role == "enumerator" and cu.district and cu.district != "National":
         q = q.filter(School.district == cu.district)
     if cu.role == "community":
-        return []
+        return None
     if district:
         q = q.filter(School.district == district)
     if school_id:
         q = q.filter(ResourceAlert.school_id == school_id)
     if level:
         q = q.filter(ResourceAlert.level == level)
-    q = q.filter(ResourceAlert.is_resolved == resolved)
+    return q.filter(ResourceAlert.is_resolved == resolved)
+
+@alerts_router.get("/count")
+def count_alerts(district: Optional[str]=Query(None),
+                 school_id: Optional[int]=Query(None),
+                 level: Optional[str]=Query(None),
+                 resolved: Optional[bool]=Query(False),
+                 db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = _alerts_list_query(db, cu, district, school_id, level, resolved)
+    if q is None:
+        return {"total": 0}
+    return {"total": q.count()}
+
+@alerts_router.get("/", response_model=List[AlertOut])
+def list_alerts(district: Optional[str]=Query(None),
+                school_id: Optional[int]=Query(None),
+                level: Optional[str]=Query(None),
+                resolved: Optional[bool]=Query(False),
+                skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+                db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = _alerts_list_query(db, cu, district, school_id, level, resolved)
+    if q is None:
+        return []
     rows = q.order_by(ResourceAlert.created_at.desc()).offset(skip).limit(limit).all()
     return [_alert_out(a) for a in rows]
 

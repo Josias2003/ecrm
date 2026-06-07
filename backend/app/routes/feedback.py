@@ -43,13 +43,7 @@ def _scope_query(q, cu):
         return q.filter(Feedback.forwarded_to_reb == True)
     return q
 
-@feedback_router.get("/", response_model=List[FeedbackOut])
-def list_feedback(district: Optional[str]=Query(None),
-                  school_id: Optional[int]=Query(None),
-                  status: Optional[str]=Query(None),
-                  issue_type: Optional[str]=Query(None),
-                  skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
-                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
+def _feedback_list_query(db, cu, district=None, school_id=None, status=None, issue_type=None):
     q = db.query(Feedback).join(School)
     q = _scope_query(q, cu)
     if district:
@@ -60,6 +54,24 @@ def list_feedback(district: Optional[str]=Query(None),
         q = q.filter(Feedback.status == status)
     if issue_type:
         q = q.filter(Feedback.issue_type == issue_type)
+    return q
+
+@feedback_router.get("/count")
+def count_feedback(district: Optional[str]=Query(None),
+                   school_id: Optional[int]=Query(None),
+                   status: Optional[str]=Query(None),
+                   issue_type: Optional[str]=Query(None),
+                   db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    return {"total": _feedback_list_query(db, cu, district, school_id, status, issue_type).count()}
+
+@feedback_router.get("/", response_model=List[FeedbackOut])
+def list_feedback(district: Optional[str]=Query(None),
+                  school_id: Optional[int]=Query(None),
+                  status: Optional[str]=Query(None),
+                  issue_type: Optional[str]=Query(None),
+                  skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = _feedback_list_query(db, cu, district, school_id, status, issue_type)
     rows = q.order_by(Feedback.created_at.desc()).offset(skip).limit(limit).all()
     return [_feedback_out(fb) for fb in rows]
 

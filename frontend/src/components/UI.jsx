@@ -353,6 +353,35 @@ export const Table = ({columns,data,empty='No records found',loading}) => (
   </div>
 )
 
+/* ── PAGINATION ────────────────────────────────────────────────── */
+export const Pagination = ({ page, totalPages, totalItems, pageSize, onPageChange }) => {
+  if (!totalItems || totalItems <= pageSize) return null
+  const start = (page - 1) * pageSize + 1
+  const end = Math.min(page * pageSize, totalItems)
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: 12, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)',
+      flexWrap: 'wrap',
+    }}>
+      <span style={{ fontSize: 12.5, color: 'var(--text2)' }}>
+        Showing {start}–{end} of {totalItems}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Btn size="sm" variant="outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          Previous
+        </Btn>
+        <span style={{ fontSize: 12.5, fontWeight: 600, padding: '0 8px', color: 'var(--text2)' }}>
+          Page {page} of {totalPages}
+        </span>
+        <Btn size="sm" variant="outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          Next
+        </Btn>
+      </div>
+    </div>
+  )
+}
+
 /* ── TABS ──────────────────────────────────────────────────────── */
 export const Tabs = ({tabs,active,onChange}) => (
   <div style={{display:'flex',gap:3,background:'#F1F5F9',padding:4,

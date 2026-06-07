@@ -37,6 +37,7 @@ export default function GISMapPage() {
       district: filterDistrict || undefined,
       status:   filterStatus   || undefined,
       school_type: filterType  || undefined,
+      limit: 1000,
     }).then(r => r.data)
   })
 

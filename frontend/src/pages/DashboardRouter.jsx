@@ -14,6 +14,7 @@ import {
   Library, FlaskConical, Monitor, MessageSquare,
 } from 'lucide-react'
 import { formatLabel } from '../utils/format'
+import RoleCapabilities from '../components/RoleCapabilities'
 
 function monthStart() {
   const d = new Date()
@@ -52,6 +53,7 @@ function AdminDashboard() {
         sub="Technical administration — users, security, and platform status"
         action={<Btn variant="outline" onClick={()=>navigate('/users')}>Manage Users</Btn>}/>
 
+      <RoleCapabilities role="admin" />
       <Alert type="info">System admin manages accounts and platform health only. Education operations are handled by REB and district officers.</Alert>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
@@ -105,6 +107,7 @@ function REBDashboard() {
       <PageHeader title="National Education Overview"
         sub={`Rwanda Education Board · ${n.total_schools||0} public schools`}
         action={<Btn onClick={() => downloadReport('district_overview')}><Download size={16}/> Export National Report</Btn>}/>
+      <RoleCapabilities role="reb" />
       {n.critical_schools>0&&<Alert type="warning"><strong>{n.critical_schools} schools</strong> in critical condition — resource intervention required.</Alert>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
         <StatCard label="Schools"    value={n.total_schools||0} sub="Public mapped" icon={School} accent="blue"/>
@@ -196,6 +199,7 @@ function DistrictDashboard() {
       <PageHeader title={`${user?.district} District`}
         sub={`${schools.length} schools · ${stu.toLocaleString()} students`}
         action={<Btn onClick={() => downloadReport('schools_summary')}><Download size={16}/> Export District Report</Btn>}/>
+      <RoleCapabilities role="district" />
       {critical>0&&<Alert type="danger"><strong>{critical} school{critical>1?'s':''}</strong> in critical condition — immediate action required.</Alert>}
       {alerts.filter(a=>a.level==='critical').length>0&&<Alert type="warning"><strong>{alerts.filter(a=>a.level==='critical').length} critical alerts</strong> active in your district.</Alert>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
@@ -337,6 +341,7 @@ function SchoolDashboard() {
       <PageHeader title={s.name||'My School'}
         sub={`${s.district} · ${s.sector} · ${s.school_type}`}
         action={<div style={{display:'flex',gap:8,alignItems:'center'}}>{s.status&&<Badge status={s.status} size="lg"/>}</div>}/>
+      <RoleCapabilities role="school" />
       {alerts.filter(a=>a.level==='critical').length>0&&<Alert type="danger">{alerts.filter(a=>a.level==='critical').length} critical resource alerts for your school.</Alert>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <StatCard label="Students"   value={stu}         sub={`${s.students_boys||0} boys · ${s.students_girls||0} girls`} icon={Users} accent="blue"/>
@@ -446,6 +451,7 @@ function EnumeratorDashboard() {
   return (
     <div>
       <PageHeader title="Field Data Collection" sub="Submit and sync school data from the field"/>
+      <RoleCapabilities role="enumerator" />
       <Alert type="info">Navigate to <strong>Schools</strong> to register new schools with GPS, or use the <strong>GIS Map</strong> to view existing locations.</Alert>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginBottom:22}}>
         <StatCard label="Your District" value={user?.district} sub="Assigned area" accent="blue"/>
@@ -473,6 +479,7 @@ function CommunityDashboard() {
   return (
     <div>
       <PageHeader title="Community Portal" sub="Report issues · Track progress · View schools"/>
+      <RoleCapabilities role="community" />
       <Alert type="info">Your reports are reviewed by the District Education Officer and help improve schools in your community.</Alert>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginBottom:22}}>
         <div style={{background:'#fff',borderRadius:13,padding:22,border:'1px solid var(--border)',textAlign:'center',cursor:'pointer'}}

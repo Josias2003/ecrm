@@ -74,11 +74,7 @@ def _assert_school_scope(cu, school: School):
         if school.district != cu.district:
             raise HTTPException(403, "Access denied for this district")
 
-@schools_router.get("/", response_model=List[SchoolOut])
-def list_schools(district: Optional[str]=Query(None), status: Optional[str]=Query(None),
-                 school_type: Optional[str]=Query(None), gps_verified: Optional[bool]=Query(None),
-                 skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=1000),
-                 db: Session = Depends(get_db), cu=Depends(get_current_user)):
+def _schools_query(db, cu, district=None, status=None, school_type=None, gps_verified=None):
     if cu.role == "admin":
         raise HTTPException(403, "System admin cannot access school records")
     q = db.query(School)
@@ -98,6 +94,21 @@ def list_schools(district: Optional[str]=Query(None), status: Optional[str]=Quer
         q = q.filter(School.school_type == school_type)
     if gps_verified is not None:
         q = q.filter(School.gps_verified == gps_verified)
+    return q
+
+@schools_router.get("/count")
+def count_schools(district: Optional[str]=Query(None), status: Optional[str]=Query(None),
+                  school_type: Optional[str]=Query(None), gps_verified: Optional[bool]=Query(None),
+                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = _schools_query(db, cu, district, status, school_type, gps_verified)
+    return {"total": q.count()}
+
+@schools_router.get("/", response_model=List[SchoolOut])
+def list_schools(district: Optional[str]=Query(None), status: Optional[str]=Query(None),
+                 school_type: Optional[str]=Query(None), gps_verified: Optional[bool]=Query(None),
+                 skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=1000),
+                 db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = _schools_query(db, cu, district, status, school_type, gps_verified)
     return q.order_by(School.district, School.name).offset(skip).limit(limit).all()
 
 @schools_router.post("/", response_model=SchoolOut, status_code=201)

@@ -22,15 +22,9 @@ def _assert_teacher_scope(cu, school: School):
     if cu.role == "district" and cu.district and school.district != cu.district:
         raise HTTPException(403, "You can only manage teachers in your district")
 
-@teachers_router.get("/", response_model=List[TeacherOut])
-def list_teachers(school_id: Optional[int]=Query(None),
-                  district: Optional[str]=Query(None),
-                  status: Optional[str]=Query(None),
-                  skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=5000),
-                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
+def _teachers_query(db, cu, school_id=None, district=None, status=None):
     if cu.role in ("admin", "enumerator", "community"):
         raise HTTPException(403, "Your role cannot access teacher records")
-    # reb: read-only national view
     q = db.query(Teacher).join(School)
     if cu.role == "school" and cu.school_id:
         q = q.filter(Teacher.school_id == cu.school_id)
@@ -42,6 +36,22 @@ def list_teachers(school_id: Optional[int]=Query(None),
         q = q.filter(School.district == district)
     if status:
         q = q.filter(Teacher.status == status)
+    return q
+
+@teachers_router.get("/count")
+def count_teachers(school_id: Optional[int]=Query(None),
+                   district: Optional[str]=Query(None),
+                   status: Optional[str]=Query(None),
+                   db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    return {"total": _teachers_query(db, cu, school_id, district, status).count()}
+
+@teachers_router.get("/", response_model=List[TeacherOut])
+def list_teachers(school_id: Optional[int]=Query(None),
+                  district: Optional[str]=Query(None),
+                  status: Optional[str]=Query(None),
+                  skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=5000),
+                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    q = _teachers_query(db, cu, school_id, district, status)
     return q.offset(skip).limit(limit).all()
 
 @teachers_router.post("/", response_model=TeacherOut, status_code=201)
