@@ -9,8 +9,16 @@ from app.models.models import ChatRoom, ChatMessage, ChatParticipant, User, Audi
 from app.models.models import RoleEnum
 from app.schemas.schemas import ChatRoomOut, ChatMessageOut, ChatMessageCreate, ChatContactOut, ChatRoomCreate
 from app.core.security import require_roles
+from app.data.rwanda_districts import DISTRICT_NAMES
 
-DISTRICT_SLUG = {"gasabo": "Gasabo", "kicukiro": "Kicukiro", "nyarugenge": "Nyarugenge"}
+def _district_slug(name: str) -> str:
+    return name.lower().replace(" ", "_")
+
+def _district_from_slug(slug: str, fallback: str = None) -> str:
+    for d in DISTRICT_NAMES:
+        if _district_slug(d) == slug:
+            return d
+    return fallback
 
 chat_router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
@@ -89,11 +97,11 @@ def _users_for_preset(preset: str, db: Session, cu):
         return q.filter(User.role == RoleEnum.district).all()
     if preset.startswith("headmasters_"):
         slug = preset.replace("headmasters_", "")
-        district = DISTRICT_SLUG.get(slug, cu.district)
+        district = _district_from_slug(slug, cu.district)
         return q.filter(User.role == RoleEnum.school, User.district == district).all()
     if preset.startswith("enumerators_"):
         slug = preset.replace("enumerators_", "")
-        district = DISTRICT_SLUG.get(slug, cu.district)
+        district = _district_from_slug(slug, cu.district)
         return q.filter(User.role == RoleEnum.enumerator, User.district == district).all()
     return []
 
@@ -105,13 +113,11 @@ def list_presets(cu=Depends(get_current_user)):
         {"id": "all_headmasters", "label": "All Head Masters"},
         {"id": "all_enumerators", "label": "All Field Enumerators"},
         {"id": "all_district_officers", "label": "All District Officers"},
-        {"id": "headmasters_gasabo", "label": "Head Masters — Gasabo"},
-        {"id": "headmasters_kicukiro", "label": "Head Masters — Kicukiro"},
-        {"id": "headmasters_nyarugenge", "label": "Head Masters — Nyarugenge"},
-        {"id": "enumerators_gasabo", "label": "Enumerators — Gasabo"},
-        {"id": "enumerators_kicukiro", "label": "Enumerators — Kicukiro"},
-        {"id": "enumerators_nyarugenge", "label": "Enumerators — Nyarugenge"},
     ]
+    for d in DISTRICT_NAMES:
+        slug = _district_slug(d)
+        presets.append({"id": f"headmasters_{slug}", "label": f"Head Masters — {d}"})
+        presets.append({"id": f"enumerators_{slug}", "label": f"Enumerators — {d}"})
     return presets
 
 @chat_router.post("/rooms", response_model=ChatRoomOut, status_code=201)

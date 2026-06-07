@@ -16,6 +16,13 @@ import {
   Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { DISTRICT_NAMES, sectorsFor } from '../constants/rwandaDistricts'
+
+const apiErr = (e) => toast.error(
+  typeof e?.response?.data?.detail === 'string'
+    ? e.response.data.detail
+    : 'Action failed — ensure the API server is running'
+)
 
 const textMatches = (query, values) => {
   const q = query.trim().toLowerCase()
@@ -26,12 +33,6 @@ const textMatches = (query, values) => {
 // ════════════════════════════════════════════════════════════════════
 // SCHOOLS PAGE
 // ════════════════════════════════════════════════════════════════════
-const DISTRICTS = ['Gasabo','Kicukiro','Nyarugenge']
-const SECTORS = {
-  Gasabo:['Remera','Kacyiru','Kimironko','Gisozi','Kinyinya','Jabana','Jali','Nduba','Ndera','Rusororo','Rutunga','Bumbogo','Gatsata','Gikomero','Gaculiro'],
-  Kicukiro:['Niboye','Kanombe','Nyanza','Gahanga','Masaka','Kagarama','Kigarama','Gatenga','Busanza','Rubungo'],
-  Nyarugenge:['Nyamirambo','Biryogo','Muhima','Rwezamenyo','Kimisagara','Gitega','Kanyinya','Mageragere','Kigali','Nyakabanda'],
-}
 const EMPTY_SCHOOL = {
   name:'',district:'Gasabo',sector:'',cell:'',school_type:'Primary',ownership:'Public',
   latitude:'',longitude:'',students_boys:0,students_girls:0,teachers_male:0,teachers_female:0,
@@ -63,9 +64,21 @@ export function SchoolsPage() {
     s.name, s.district, s.sector, s.school_type, s.ownership, s.status,
   ]))
 
-  const createM = useMutation({ mutationFn:d=>schoolsAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['schools']); setAddOpen(false); toast.success('School registered') } })
-  const updateM = useMutation({ mutationFn:({id,d})=>schoolsAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['schools']); setEditS(null); toast.success('School updated') } })
-  const deleteM = useMutation({ mutationFn:id=>schoolsAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['schools']); toast.success('School removed') } })
+  const createM = useMutation({
+    mutationFn: d => schoolsAPI.create(d),
+    onSuccess: () => { qc.invalidateQueries(['schools']); setAddOpen(false); toast.success('School registered') },
+    onError: apiErr,
+  })
+  const updateM = useMutation({
+    mutationFn: ({ id, d }) => schoolsAPI.update(id, d),
+    onSuccess: () => { qc.invalidateQueries(['schools']); setEditS(null); toast.success('School updated') },
+    onError: apiErr,
+  })
+  const deleteM = useMutation({
+    mutationFn: id => schoolsAPI.delete(id),
+    onSuccess: () => { qc.invalidateQueries(['schools']); toast.success('School removed') },
+    onError: apiErr,
+  })
 
   const openEdit = s => { setForm({...s,latitude:s.latitude||'',longitude:s.longitude||'',distance_to_road_km:s.distance_to_road_km||''}); setEditS(s) }
   const openAdd = () => { setForm({...EMPTY_SCHOOL, district: user?.role==='district'?user.district:EMPTY_SCHOOL.district}); setAddOpen(true) }
@@ -122,7 +135,7 @@ export function SchoolsPage() {
         <select value={fd} onChange={e=>setFd(e.target.value)} disabled={user?.role==='district'}
           style={{padding:'7px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontSize:12.5,background:'#fff',cursor:'pointer'}}>
           <option value="">All Districts</option>
-          {DISTRICTS.map(d=><option key={d}>{d}</option>)}
+          {DISTRICT_NAMES.map(d=><option key={d}>{d}</option>)}
         </select>
         <select value={fs} onChange={e=>setFs(e.target.value)}
           style={{padding:'7px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontSize:12.5,background:'#fff',cursor:'pointer'}}>
@@ -314,9 +327,9 @@ export function TeachersPage() {
     t.status, t.phone, schoolById[t.school_id]?.name,
   ]))
 
-  const addM = useMutation({ mutationFn:d=>teachersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setAddOpen(false); toast.success('Teacher added') } })
-  const updM = useMutation({ mutationFn:({id,d})=>teachersAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setEditT(null); toast.success('Teacher updated') } })
-  const delM = useMutation({ mutationFn:id=>teachersAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['teachers']); toast.success('Teacher removed') } })
+  const addM = useMutation({ mutationFn:d=>teachersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setAddOpen(false); toast.success('Teacher added') }, onError: apiErr })
+  const updM = useMutation({ mutationFn:({id,d})=>teachersAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setEditT(null); toast.success('Teacher updated') }, onError: apiErr })
+  const delM = useMutation({ mutationFn:id=>teachersAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['teachers']); toast.success('Teacher removed') }, onError: apiErr })
 
   const set = k=>e=>setForm(p=>({...p,[k]:e.target.type==='number'?Number(e.target.value):e.target.value}))
   const qualData = ['A2','A1','A0','Masters','PhD'].map(q=>({name:q,value:teachers.filter(t=>t.qualification===q).length})).filter(d=>d.value>0)
@@ -860,9 +873,9 @@ export function UsersPage() {
   const [form, setForm] = useState({full_name:'',email:'',password:'',role:'district',district:'Gasabo',school_id:null})
   const { data: users=[], isLoading } = useQuery({ queryKey:['users'], queryFn:()=>usersAPI.list().then(r=>r.data) })
 
-  const addM = useMutation({ mutationFn:d=>usersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['users']); setAddOpen(false); toast.success('User created') } })
-  const delM = useMutation({ mutationFn:id=>usersAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User removed') } })
-  const togM = useMutation({ mutationFn:({id,active})=>usersAPI.update(id,{is_active:active}), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User status updated') } })
+  const addM = useMutation({ mutationFn:d=>usersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['users']); setAddOpen(false); toast.success('User created') }, onError: apiErr })
+  const delM = useMutation({ mutationFn:id=>usersAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User removed') }, onError: apiErr })
+  const togM = useMutation({ mutationFn:({id,active})=>usersAPI.update(id,{is_active:active}), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User status updated') }, onError: apiErr })
 
   const roleColors = {admin:'critical',reb:'reviewed',district:'pending',school:'good',enumerator:'info',community:'moderate'}
   const set = k=>e=>setForm(p=>({...p,[k]:e.target.value}))
@@ -911,7 +924,7 @@ export function UsersPage() {
           <Field label="Email *"><Input type="email" placeholder="name@reb.rw" value={form.email} onChange={set('email')}/></Field>
           <Field label="Password *"><Input type="password" placeholder="Min 8 chars" value={form.password} onChange={set('password')}/></Field>
           <Field label="Role"><Select options={['admin','reb','district','school','enumerator','community']} value={form.role} onChange={set('role')}/></Field>
-          <Field label="District"><Select options={['National','Gasabo','Kicukiro','Nyarugenge']} value={form.district} onChange={set('district')}/></Field>
+          <Field label="District"><Select options={['National', ...DISTRICT_NAMES]} value={form.district} onChange={set('district')}/></Field>
         </div>
         <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:20}}>
           <Btn variant="outline" onClick={()=>setAddOpen(false)}>Cancel</Btn>

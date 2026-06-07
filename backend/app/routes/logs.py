@@ -10,7 +10,7 @@ from app.schemas.schemas import AuditLogOut, EnrollmentHistoryOut
 
 logs_router = APIRouter(prefix="/api/logs", tags=["Logs"])
 
-@logs_router.get("", response_model=List[AuditLogOut])
+@logs_router.get("/", response_model=List[AuditLogOut])
 def get_logs(limit: int=Query(50, le=500),
              action_type: Optional[str]=Query(None),
              db: Session = Depends(get_db), cu=Depends(require_roles("admin"))):

@@ -44,17 +44,21 @@ export const authAPI = {
   resetPassword: (data) => client.post('/api/auth/reset-password', data),
 }
 
+export const metaAPI = {
+  districts: () => client.get('/api/meta/districts'),
+}
+
 export const usersAPI = {
-  list: (skip = 0, limit = 50) => client.get('/api/users/', { params: { skip, limit } }),
-  create: (data) => client.post('/api/users', data),
+  list: (skip = 0, limit = 500) => client.get('/api/users/', { params: { skip, limit } }),
+  create: (data) => client.post('/api/users/', data),
   update: (id, data) => client.patch(`/api/users/${id}`, data),
   delete: (id) => client.delete(`/api/users/${id}`),
 }
 
 export const schoolsAPI = {
-  list: (params) => client.get('/api/schools/', { params }),
+  list: (params) => client.get('/api/schools/', { params: { limit: 1000, ...params } }),
   get: (id) => client.get(`/api/schools/${id}`),
-  create: (data) => client.post('/api/schools', data),
+  create: (data) => client.post('/api/schools/', data),
   update: (id, data) => client.patch(`/api/schools/${id}`, data),
   delete: (id) => client.delete(`/api/schools/${id}`),
   verifyGPS: (id) => client.patch(`/api/schools/${id}/verify-gps`),
@@ -63,16 +67,16 @@ export const schoolsAPI = {
 }
 
 export const teachersAPI = {
-  list: (params) => client.get('/api/teachers/', { params }),
-  create: (data) => client.post('/api/teachers', data),
+  list: (params) => client.get('/api/teachers/', { params: { limit: 2000, ...params } }),
+  create: (data) => client.post('/api/teachers/', data),
   update: (id, data) => client.patch(`/api/teachers/${id}`, data),
   delete: (id) => client.delete(`/api/teachers/${id}`),
   workload: (params) => client.get('/api/teachers/workload/analysis', { params }),
 }
 
 export const feedbackAPI = {
-  list: (params) => client.get('/api/feedback/', { params }),
-  submit: (data) => client.post('/api/feedback', data),
+  list: (params) => client.get('/api/feedback/', { params: { limit: 500, ...params } }),
+  submit: (data) => client.post('/api/feedback/', data),
   update: (id, data) => client.patch(`/api/feedback/${id}`, data),
   forward: (id) => client.post(`/api/feedback/${id}/forward`),
   reopen: (id) => client.post(`/api/feedback/${id}/reopen`),
@@ -81,7 +85,7 @@ export const feedbackAPI = {
 }
 
 export const alertsAPI = {
-  list: (params) => client.get('/api/alerts/', { params }),
+  list: (params) => client.get('/api/alerts/', { params: { limit: 500, ...params } }),
   resolve: (id, data) => client.patch(`/api/alerts/${id}/resolve`, data),
   forward: (id) => client.post(`/api/alerts/${id}/forward`),
   reopen: (id) => client.post(`/api/alerts/${id}/reopen`),

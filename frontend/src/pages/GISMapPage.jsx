@@ -7,6 +7,7 @@ import SchoolDetailModal from '../components/SchoolDetailModal'
 import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, PageHeader, Modal, Field, Input } from '../components/UI'
 import toast from 'react-hot-toast'
 import { MapPin, Layers, Download } from 'lucide-react'
+import { DISTRICT_NAMES } from '../constants/rwandaDistricts'
 
 function scopedDistrict(user) {
   if (!user) return ''
@@ -50,7 +51,8 @@ export default function GISMapPage() {
       qc.invalidateQueries(['schools-gis'])
       qc.invalidateQueries(['gis-summary'])
       toast.success('GPS coordinates verified!')
-    }
+    },
+    onError: e => toast.error(e?.response?.data?.detail || 'GPS verification failed'),
   })
 
   const updateGPSMut = useMutation({
@@ -61,7 +63,8 @@ export default function GISMapPage() {
       qc.invalidateQueries(['schools-gis'])
       setGpsModalOpen(false)
       toast.success('GPS coordinates updated. Verify when on-site.')
-    }
+    },
+    onError: e => toast.error(e?.response?.data?.detail || 'GPS update failed'),
   })
 
   const filtered = schools.filter(s => {
@@ -130,7 +133,7 @@ export default function GISMapPage() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text2)' }}>Filter:</span>
         {[
-          { val: filterDistrict, set: setFilterDistrict, options: [['', 'All Districts'], ['Gasabo','Gasabo'], ['Kicukiro','Kicukiro'], ['Nyarugenge','Nyarugenge']], disabled: ['district','enumerator'].includes(user?.role) },
+          { val: filterDistrict, set: setFilterDistrict, options: [['', 'All Districts'], ...DISTRICT_NAMES.map(d => [d, d])], disabled: ['district','enumerator'].includes(user?.role) },
           { val: filterStatus,   set: setFilterStatus,   options: [['','All Statuses'],['good','Good'],['moderate','Moderate'],['critical','Critical']] },
           { val: filterType,     set: setFilterType,     options: [['','All Types'],['Primary','Primary'],['Secondary','Secondary']] },
           { val: filterGPS,      set: setFilterGPS,      options: [['','All GPS'],['verified','Verified'],['unverified','Unverified']] },

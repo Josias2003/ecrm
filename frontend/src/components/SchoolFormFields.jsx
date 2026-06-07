@@ -2,13 +2,7 @@ import { memo } from 'react'
 import { Field, Input, Select, Checkbox, Btn } from './UI'
 import toast from 'react-hot-toast'
 import { MapPin } from 'lucide-react'
-
-const DISTRICTS = ['Gasabo', 'Kicukiro', 'Nyarugenge']
-const SECTORS = {
-  Gasabo: ['Remera', 'Kacyiru', 'Kimironko', 'Gisozi', 'Kinyinya', 'Jabana', 'Jali', 'Nduba', 'Ndera', 'Rusororo', 'Rutunga', 'Bumbogo', 'Gatsata', 'Gikomero', 'Gaculiro'],
-  Kicukiro: ['Niboye', 'Kanombe', 'Nyanza', 'Gahanga', 'Masaka', 'Kagarama', 'Kigarama', 'Gatenga', 'Busanza', 'Rubungo'],
-  Nyarugenge: ['Nyamirambo', 'Biryogo', 'Muhima', 'Rwezamenyo', 'Kimisagara', 'Gitega', 'Kanyinya', 'Mageragere', 'Kigali', 'Nyakabanda'],
-}
+import { DISTRICT_NAMES, sectorsFor } from '../constants/rwandaDistricts'
 
 function SchoolFormFields({ form, setForm, lockDistrict }) {
   const set = (k) => (e) => setForm(p => ({
@@ -39,10 +33,10 @@ function SchoolFormFields({ form, setForm, lockDistrict }) {
           <Input placeholder="e.g. GS Remera" value={form.name} onChange={set('name')} required />
         </Field>
         <Field label="District *">
-          <Select options={DISTRICTS} value={form.district} onChange={set('district')} disabled={lockDistrict} />
+          <Select options={DISTRICT_NAMES} value={form.district} onChange={set('district')} disabled={lockDistrict} />
         </Field>
         <Field label="Sector *">
-          <Select options={['', ...(SECTORS[form.district] || [])]} value={form.sector} onChange={set('sector')} />
+          <Select options={['', ...sectorsFor(form.district)]} value={form.sector} onChange={set('sector')} />
         </Field>
         <Field label="Cell"><Input placeholder="Cell name" value={form.cell || ''} onChange={set('cell')} /></Field>
         <Field label="Type *">

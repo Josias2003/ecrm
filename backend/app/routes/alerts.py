@@ -25,7 +25,7 @@ def _alert_out(a: ResourceAlert) -> AlertOut:
         created_at=a.created_at,
     )
 
-@alerts_router.get("", response_model=List[AlertOut])
+@alerts_router.get("/", response_model=List[AlertOut])
 def list_alerts(district: Optional[str]=Query(None),
                 school_id: Optional[int]=Query(None),
                 level: Optional[str]=Query(None),

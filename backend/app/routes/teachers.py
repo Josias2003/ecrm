@@ -22,11 +22,11 @@ def _assert_teacher_scope(cu, school: School):
     if cu.role == "district" and cu.district and school.district != cu.district:
         raise HTTPException(403, "You can only manage teachers in your district")
 
-@teachers_router.get("", response_model=List[TeacherOut])
+@teachers_router.get("/", response_model=List[TeacherOut])
 def list_teachers(school_id: Optional[int]=Query(None),
                   district: Optional[str]=Query(None),
                   status: Optional[str]=Query(None),
-                  skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+                  skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=5000),
                   db: Session = Depends(get_db), cu=Depends(get_current_user)):
     if cu.role in ("admin", "enumerator", "community"):
         raise HTTPException(403, "Your role cannot access teacher records")

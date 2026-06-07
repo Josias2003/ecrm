@@ -74,10 +74,10 @@ def _assert_school_scope(cu, school: School):
         if school.district != cu.district:
             raise HTTPException(403, "Access denied for this district")
 
-@schools_router.get("", response_model=List[SchoolOut])
+@schools_router.get("/", response_model=List[SchoolOut])
 def list_schools(district: Optional[str]=Query(None), status: Optional[str]=Query(None),
                  school_type: Optional[str]=Query(None), gps_verified: Optional[bool]=Query(None),
-                 skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+                 skip: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=1000),
                  db: Session = Depends(get_db), cu=Depends(get_current_user)):
     if cu.role == "admin":
         raise HTTPException(403, "System admin cannot access school records")

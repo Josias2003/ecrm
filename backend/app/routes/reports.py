@@ -273,7 +273,8 @@ def _build_report(db, cu, rtype, start_dt, end_dt):
     elif rtype == "district_overview":
         if role not in ["reb", "district"]:
             raise HTTPException(403, "Not allowed")
-        districts = ["Gasabo", "Kicukiro", "Nyarugenge"]
+        from app.data.rwanda_districts import DISTRICT_NAMES
+        districts = list(DISTRICT_NAMES)
         if role == "district" and cu.district:
             districts = [cu.district]
         for d in districts:

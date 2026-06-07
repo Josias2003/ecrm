@@ -18,7 +18,7 @@ const SQUARES = [
 ]
 
 const FEATURES = [
-  { icon: MapPin, title: 'GIS School Mapping', desc: 'Leaflet maps with GPS capture, verification, and GeoJSON export across Kigali districts.' },
+  { icon: MapPin, title: 'GIS School Mapping', desc: 'Interactive maps with GPS capture, verification, and GeoJSON export across all 30 districts of Rwanda.' },
   { icon: BarChart3, title: 'Analytics & Risk Scores', desc: 'National and district dashboards with enrollment trends and intervention priority scoring.' },
   { icon: BellRing, title: 'Resource Alerts', desc: 'Automatic gap detection for textbooks, desks, sanitation, teachers, water, and GPS status.' },
   { icon: MessageSquare, title: 'Issue Threads', desc: 'Community and school feedback with chat-style threads, forward to REB, and reopen workflow.' },
@@ -27,9 +27,9 @@ const FEATURES = [
 ]
 
 const STATS = [
-  { v: '35+', l: 'Schools mapped' },
-  { v: '2,000+', l: 'Teachers tracked' },
-  { v: '3', l: 'Kigali districts' },
+  { v: '390+', l: 'Public schools mapped' },
+  { v: '5,000+', l: 'Teachers tracked' },
+  { v: '30', l: 'Districts nationwide' },
 ]
 
 export default function LandingPage() {
@@ -115,7 +115,7 @@ export default function LandingPage() {
             background: 'linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.75) 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>
-            Map resources. Close gaps. Empower every school in Kigali.
+            Map resources. Close gaps. Empower every public school in Rwanda.
           </h1>
           <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.6)', maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.7 }}>
             Track school infrastructure, teacher workloads, resource gaps, and community feedback
@@ -191,7 +191,7 @@ export default function LandingPage() {
         </section>
 
         <footer style={{ textAlign: 'center', padding: '24px 0 40px', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
-          ECRM Rwanda © {new Date().getFullYear()} — Ministry of Education · Kigali City
+          ECRM Rwanda © {new Date().getFullYear()} — Ministry of Education · National Coverage
         </footer>
       </div>
 

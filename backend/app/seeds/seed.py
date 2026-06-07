@@ -14,6 +14,7 @@ from app.models.models import (Base, User, School, Teacher, Feedback,
                                 ResourceAlert, EnrollmentHistory, AuditLog,
                                 ChatRoom, ChatMessage, ChatParticipant,
                                 StatusEnum, AlertLevelEnum)
+from app.data.rwanda_districts import RWANDA_DISTRICTS, DISTRICT_NAMES
 
 # ── Deterministic RNG ──────────────────────────────────────────────
 def mkrng(seed=42):
@@ -33,19 +34,9 @@ def weighted(r, items, weights):
         if x <= acc: return item
     return items[-1]
 
-# ── Rwanda Data ────────────────────────────────────────────────────
-DISTRICTS = [
-    {"name": "Gasabo", "lat": -1.930, "lng": 30.110,
-     "sectors": ["Remera","Kacyiru","Kimironko","Gisozi","Kinyinya","Jabana",
-                 "Jali","Nduba","Ndera","Rusororo","Rutunga","Bumbogo","Gatsata","Gikomero","Gaculiro"]},
-    {"name": "Kicukiro", "lat": -1.975, "lng": 30.105,
-     "sectors": ["Niboye","Kanombe","Nyanza","Gahanga","Masaka","Kagarama",
-                 "Kigarama","Gatenga","Busanza","Rubungo"]},
-    {"name": "Nyarugenge", "lat": -1.960, "lng": 30.060,
-     "sectors": ["Nyamirambo","Biryogo","Muhima","Rwezamenyo","Kimisagara",
-                 "Gitega","Kanyinya","Mageragere","Kigali","Nyakabanda"]},
-]
-SPREAD = 0.022
+# ── Rwanda Data (30 districts, national coverage) ─────────────────
+SCHOOLS_PER_DISTRICT = 13
+SPREAD = 0.045
 
 FNAMES = ["Alice","Emmanuel","Grace","James","Sandra","Denis","Claudine","Patrick",
           "Solange","Jean","Marie","Pierre","Odette","Etienne","Vestine","Innocent",
@@ -149,43 +140,44 @@ def seed():
     schools = []
     pfx = {"Primary": ["GS","EP"], "Secondary": ["LS","CS","ES"]}
 
-    # ── SEED SCHOOLS ──────────────────────────────────────────────
-    print("  Seeding schools...")
-    for dist in DISTRICTS:
-        for sector in dist["sectors"]:
-            stype = weighted(rng, ["Primary","Secondary"], [0.65, 0.35])
-            cls   = ri(rng, 6, 28)
-            boys  = cls * ri(rng, 15, 30)
-            girls = cls * ri(rng, 15, 28)
+    # ── SEED SCHOOLS (30 districts × ~13 schools) ────────────────
+    print(f"  Seeding schools across {len(RWANDA_DISTRICTS)} districts...")
+    for dist in RWANDA_DISTRICTS:
+        for n in range(SCHOOLS_PER_DISTRICT):
+            sector = pick(rng, dist["sectors"])
+            stype = weighted(rng, ["Primary", "Secondary"], [0.68, 0.32])
+            cls   = ri(rng, 5, 24)
+            boys  = cls * ri(rng, 14, 28)
+            girls = cls * ri(rng, 14, 26)
             stu   = boys + girls
-            tmale = max(1, round(stu * rf(rng, 1/50, 1/25) * rf(rng, 0.3, 0.6)))
-            tfem  = max(1, round(stu * rf(rng, 1/50, 1/25) * rf(rng, 0.4, 0.7)))
-            txt   = round(stu * rf(rng, 0.4, 1.1))
-            dsk   = round(stu * rf(rng, 0.5, 1.05))
-            tlt_b = max(1, round(boys * rf(rng, 1/80, 1/20)))
-            tlt_g = max(1, round(girls * rf(rng, 1/80, 1/20)))
+            tmale = max(1, round(stu * rf(rng, 1/55, 1/28) * rf(rng, 0.3, 0.6)))
+            tfem  = max(1, round(stu * rf(rng, 1/55, 1/28) * rf(rng, 0.4, 0.7)))
+            txt   = round(stu * rf(rng, 0.35, 1.05))
+            dsk   = round(stu * rf(rng, 0.45, 1.0))
+            tlt_b = max(1, round(boys * rf(rng, 1/90, 1/25)))
+            tlt_g = max(1, round(girls * rf(rng, 1/90, 1/25)))
             lat   = dist["lat"] + (rng() - 0.5) * 2 * SPREAD
             lng   = dist["lng"] + (rng() - 0.5) * 2 * SPREAD
-            gps_v = rng() > 0.3
-            water = rng() > 0.35
-            elec  = rng() > 0.25
-            lib   = rng() > 0.55
-            ict   = rng() > 0.72
-            sci   = rng() > 0.80
-            inet  = rng() > 0.78
-            fence = rng() > 0.45
-            dist_road = round(rf(rng, 0.1, 5.0), 2)
+            gps_v = rng() > 0.28
+            water = rng() > 0.32
+            elec  = rng() > 0.28
+            lib   = rng() > 0.52
+            ict   = rng() > 0.70
+            sci   = rng() > 0.78
+            inet  = rng() > 0.80
+            fence = rng() > 0.42
+            dist_road = round(rf(rng, 0.2, 8.0), 2)
 
             s = School(
-                name=f"{pick(rng, pfx[stype])} {sector}",
+                name=f"{pick(rng, pfx[stype])} {sector} {n+1}",
                 district=dist["name"], sector=sector,
                 school_type=stype,
-                ownership=weighted(rng, ["Public","Private","Faith-based"], [0.75, 0.15, 0.10]),
+                ownership=weighted(rng, ["Public", "Private", "Faith-based"], [0.82, 0.10, 0.08]),
                 latitude=round(lat, 5), longitude=round(lng, 5),
                 gps_verified=gps_v,
                 students_boys=boys, students_girls=girls,
                 teachers_male=tmale, teachers_female=tfem,
-                classrooms=cls, classrooms_good=max(1, cls - ri(rng,0,3)),
+                classrooms=cls, classrooms_good=max(1, cls - ri(rng, 0, 3)),
                 textbooks=txt, desks=dsk,
                 toilets_boys=tlt_b, toilets_girls=tlt_g,
                 has_library=lib, has_ict_lab=ict, has_science_lab=sci,
@@ -226,12 +218,13 @@ def seed():
     print("  Seeding teachers...")
     rng2 = mkrng(77)
     t_count = 0
+    batch = []
     for school in schools:
         subjects = S_SUBJECTS if school.school_type == "Secondary" else P_SUBJECTS
         n_teachers = (school.teachers_male or 0) + (school.teachers_female or 0)
         for i in range(n_teachers):
             gender = "Female" if i < (school.teachers_female or 0) else "Male"
-            db.add(Teacher(
+            batch.append(Teacher(
                 school_id=school.id,
                 full_name=f"{pick(rng2, FNAMES)} {pick(rng2, LNAMES)}",
                 gender=gender,
@@ -243,7 +236,13 @@ def seed():
                 phone=f"+25078{ri(rng2,1000000,9999999)}",
             ))
             t_count += 1
-    db.commit()
+            if len(batch) >= 500:
+                db.add_all(batch)
+                db.commit()
+                batch.clear()
+    if batch:
+        db.add_all(batch)
+        db.commit()
     print(f"     OK: {t_count} teachers seeded")
 
     # ── SEED FEEDBACK ─────────────────────────────────────────────
@@ -309,10 +308,10 @@ def seed():
     db.add(ChatRoom(title="Head Masters", scope="role_group", target_role="school"))
     db.add(ChatRoom(title="Field Enumerators", scope="role_group", target_role="enumerator"))
     db.add(ChatRoom(title="District Officers", scope="role_group", target_role="district"))
-    for d in ["Gasabo", "Kicukiro", "Nyarugenge"]:
+    for d in DISTRICT_NAMES:
         db.add(ChatRoom(title=f"{d} Field Team", scope="district", district=d))
         db.add(ChatRoom(title=f"{d} Head Masters", scope="district_group", target_role="school", district=d))
-    for school in schools:
+    for school in schools[:60]:
         db.add(ChatRoom(title=f"{school.name} Staff", scope="school", school_id=school.id, district=school.district))
     db.commit()
     print("     OK: Chat rooms seeded")
@@ -326,6 +325,7 @@ def seed():
     print("\n" + ("-" * 55))
     print("SEED COMPLETE")
     print("-" * 55)
+    print(f"  Districts: {len(DISTRICT_NAMES)}")
     print(f"  Schools:   {len(schools)}")
     print(f"  Teachers:  {t_count}")
     print(f"  Feedback:  {fb_count}")

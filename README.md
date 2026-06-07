@@ -6,7 +6,7 @@
 ## System Overview
 
 ECRM is a GIS-powered web platform for tracking and managing educational resources across
-public schools in Kigali, Rwanda. It supports six distinct user roles and provides
+public primary and secondary schools in all 30 districts of Rwanda. It supports six distinct user roles and provides
 real-time geospatial visualisation, resource gap detection, teacher workload analysis,
 community feedback collection, and data export capabilities.
 

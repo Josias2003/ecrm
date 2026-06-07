@@ -111,7 +111,7 @@ def change_password(payload: ChangePasswordRequest, request: Request, db: Sessio
 # Users management
 users_router = APIRouter(prefix="/api/users", tags=["Users"])
 
-@users_router.get("", response_model=List[UserOut])
+@users_router.get("/", response_model=List[UserOut])
 def list_users(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
                db: Session = Depends(get_db), cu=Depends(require_roles("admin"))):
     return db.query(User).offset(skip).limit(limit).all()

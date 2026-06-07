@@ -3,8 +3,9 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 
+import { RWANDA_CENTER, RWANDA_BOUNDS } from '../constants/rwandaDistricts'
+
 const STATUS_COLOR = { good: '#10B981', moderate: '#F59E0B', critical: '#EF4444' }
-const KIGALI_CENTER = [-1.955, 30.085]
 
 const TILE_LAYERS = [
   {
@@ -25,21 +26,6 @@ const TILE_LAYERS = [
     },
   },
 ]
-
-const DISTRICT_BOUNDS = {
-  Gasabo: [
-    [-1.885, 30.035], [-1.858, 30.103], [-1.898, 30.170],
-    [-1.957, 30.156], [-1.972, 30.082], [-1.930, 30.040],
-  ],
-  Kicukiro: [
-    [-1.948, 30.060], [-1.934, 30.132], [-1.984, 30.172],
-    [-2.035, 30.120], [-2.018, 30.055],
-  ],
-  Nyarugenge: [
-    [-1.910, 30.030], [-1.945, 30.020], [-2.005, 30.038],
-    [-2.015, 30.088], [-1.960, 30.094], [-1.928, 30.070],
-  ],
-}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -154,7 +140,7 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, hi
           zoomControl: true,
           scrollWheelZoom: true,
           preferCanvas: true,
-        }).setView(KIGALI_CENTER, 12)
+        }).setView(RWANDA_CENTER, 8)
 
         const addTileLayer = (index = 0) => {
           const provider = TILE_LAYERS[index]
@@ -185,25 +171,6 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, hi
 
         addTileLayer()
 
-        const districtColors = {
-          Gasabo: '#2563EB',
-          Kicukiro: '#10B981',
-          Nyarugenge: '#F59E0B',
-        }
-
-        Object.entries(DISTRICT_BOUNDS).forEach(([district, points]) => {
-          L.polygon(points, {
-            color: districtColors[district],
-            weight: 1.5,
-            opacity: 0.7,
-            fillColor: districtColors[district],
-            fillOpacity: 0.06,
-          }).bindTooltip(district, {
-            permanent: false,
-            direction: 'center',
-          }).addTo(map)
-        })
-
         const cluster = L.markerClusterGroup({
           chunkedLoading: true,
           spiderfyOnMaxZoom: true,
@@ -219,7 +186,7 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, hi
         requestAnimationFrame(() => map.invalidateSize())
 
         clusterRef.current = cluster
-        instanceRef.current = { map, L, districtColors }
+        instanceRef.current = { map, L }
         setMapReady(true)
       } catch {
         if (!cancelled) {
@@ -284,13 +251,11 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, hi
     })
 
     if (bounds.length > 1) {
-      try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }) } catch {}
+      try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: filterDistrict ? 13 : 10 }) } catch {}
     } else if (bounds.length === 1) {
       map.setView(bounds[0], 14)
-    } else if (filterDistrict && DISTRICT_BOUNDS[filterDistrict]) {
-      try { map.fitBounds(DISTRICT_BOUNDS[filterDistrict], { padding: [40, 40], maxZoom: 13 }) } catch {}
     } else {
-      map.setView(KIGALI_CENTER, 12)
+      try { map.fitBounds(RWANDA_BOUNDS, { padding: [30, 30] }) } catch { map.setView(RWANDA_CENTER, 8) }
     }
 
     requestAnimationFrame(() => map.invalidateSize())

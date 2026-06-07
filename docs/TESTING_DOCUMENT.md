@@ -313,7 +313,7 @@ GET  /api/reports/export?type=schools_summary&format=pdf
 GET  /api/chat/presets              (REB token)
 ```
 
-**CORS note:** List endpoints use trailing slash (`/api/alerts/`) to avoid redirect CORS errors.
+**API note:** All list and create endpoints use trailing slash (`/api/schools/`, `/api/teachers/`) — required for FastAPI with `redirect_slashes=False`.
 
 ---
 
@@ -321,12 +321,12 @@ GET  /api/chat/presets              (REB token)
 
 | Entity             | Count  | Notes                                    |
 |--------------------|--------|------------------------------------------|
-| Schools            | 35     | Gasabo (15), Kicukiro (10), Nyarugenge (10) |
-| Teachers           | ~2,000 | Proportional to school sizes             |
-| Feedback           | ~150   | Includes thread messages after use       |
-| Resource Alerts    | ~200   | Auto-generated from resource levels      |
-| Enrollment History | 140    | 4 years × 35 schools                     |
-| Chat Rooms         | 40+    | National, role groups, district teams    |
+| Schools            | 390    | 30 districts × ~13 public schools each   |
+| Teachers           | ~6,000 | Proportional to school enrollment        |
+| Feedback           | ~430   | Includes thread messages after use       |
+| Resource Alerts    | ~590   | Auto-generated from resource levels      |
+| Enrollment History | 1,560  | 4 years × 390 schools                    |
+| Chat Rooms         | 90+    | National, 30 district teams, headmasters |
 | Users              | 8      | All 6 roles represented                  |
 
 ---

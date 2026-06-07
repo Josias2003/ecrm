@@ -43,7 +43,7 @@ def _scope_query(q, cu):
         return q.filter(Feedback.forwarded_to_reb == True)
     return q
 
-@feedback_router.get("", response_model=List[FeedbackOut])
+@feedback_router.get("/", response_model=List[FeedbackOut])
 def list_feedback(district: Optional[str]=Query(None),
                   school_id: Optional[int]=Query(None),
                   status: Optional[str]=Query(None),

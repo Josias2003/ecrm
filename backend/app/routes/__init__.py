@@ -8,10 +8,11 @@ from app.routes.logs import logs_router, enrollment_router
 from app.routes.reports import reports_router
 from app.routes.chat import chat_router
 from app.routes.system import system_router
+from app.routes.meta import meta_router
 
 __all__ = [
     "auth_router", "users_router", "schools_router",
     "teachers_router", "feedback_router", "alerts_router",
     "analytics_router", "logs_router", "enrollment_router",
-    "reports_router", "chat_router", "system_router",
+    "reports_router", "chat_router", "system_router", "meta_router",
 ]
