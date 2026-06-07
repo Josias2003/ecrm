@@ -12,7 +12,7 @@ analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @analytics_router.get("/national", response_model=NationalStats)
 def national_stats(db: Session = Depends(get_db),
-                   cu=Depends(require_roles("admin","reb"))):
+                   cu=Depends(require_roles("reb"))):
     ss = db.query(School).all()
     return NationalStats(
         total_schools=len(ss),

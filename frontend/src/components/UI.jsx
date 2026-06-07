@@ -4,29 +4,30 @@ import { Loader2, AlertTriangle, CheckCircle, Info, X, ChevronDown } from 'lucid
 export const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900;1,14..32,300..900&family=Syne:wght@700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --navy:#0D1B2A;--navy2:#162032;--navy3:#1E3050;
-  --blue:#2563EB;--blue-h:#1D4ED8;--blue-lt:#EFF6FF;--blue-md:#BFDBFE;
-  --cyan:#06B6D4;--green:#10B981;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;
-  --bg:#F1F5F9;--bg2:#F8FAFC;--white:#fff;
-  --border:#E2E8F0;--border2:#CBD5E1;
-  --text:#0F172A;--text2:#475569;--text3:#94A3B8;
-  --r:12px;--r-lg:16px;
-  --sh-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
-  --sh:0 4px 16px rgba(0,0,0,.08);
-  --sh-lg:0 12px 40px rgba(0,0,0,.12);
-}
-:root{
+:root,[data-theme="light"]{
   --navy:#0F172A;--navy2:#111D33;--navy3:#1E3050;
   --blue:#3B82F6;--blue-h:#2563EB;--blue-lt:#EFF6FF;--blue-md:#BFDBFE;
   --cyan:#14B8A6;--green:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;
   --bg:#F8FAFC;--bg2:#FFFFFF;--white:#fff;
   --border:#E2E8F0;--border2:#CBD5E1;
   --text:#0F172A;--text2:#64748B;--text3:#94A3B8;
+  --card:#fff;--topbar:#fff;
   --r:12px;--r-lg:16px;
   --sh-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
   --sh:0 4px 16px rgba(0,0,0,.08);
   --sh-lg:0 12px 40px rgba(0,0,0,.12);
+}
+[data-theme="dark"]{
+  --navy:#0B1220;--navy2:#0F172A;--navy3:#1E293B;
+  --blue:#60A5FA;--blue-h:#3B82F6;--blue-lt:rgba(59,130,246,.15);--blue-md:rgba(59,130,246,.25);
+  --cyan:#2DD4BF;--green:#4ADE80;--amber:#FBBF24;--red:#F87171;--purple:#A78BFA;
+  --bg:#0F172A;--bg2:#1E293B;--white:#1E293B;
+  --border:#334155;--border2:#475569;
+  --text:#F8FAFC;--text2:#94A3B8;--text3:#64748B;
+  --card:#1E293B;--topbar:#1E293B;
+  --sh-sm:0 1px 3px rgba(0,0,0,.3);
+  --sh:0 4px 16px rgba(0,0,0,.35);
+  --sh-lg:0 12px 40px rgba(0,0,0,.45);
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 h1,h2,h3{font-family:'Syne',sans-serif}
@@ -50,6 +51,7 @@ const BS = {
   pending:  {bg:'#FEF3C7',c:'#92400E',dot:'#F59E0B'},
   reviewed: {bg:'#EFF6FF',c:'#1E40AF',dot:'#2563EB'},
   resolved: {bg:'#ECFDF5',c:'#065F46',dot:'#10B981'},
+  closed:   {bg:'#F1F5F9',c:'#475569',dot:'#94A3B8'},
   Active:   {bg:'#ECFDF5',c:'#065F46',dot:'#10B981'},
   Absent:   {bg:'#FEF2F2',c:'#991B1B',dot:'#EF4444'},
   info:     {bg:'#EFF6FF',c:'#1E40AF',dot:'#2563EB'},
@@ -78,10 +80,10 @@ export const StatCard = ({ label, value, sub, icon: Icon, accent='blue', trend }
   const isAlert = accent === 'red'
   return (
     <div style={{
-      background:'#fff',
+      background:'var(--card)',
       borderRadius:12,
       padding:'20px 20px',
-      border:'1px solid #E2E8F0',
+      border:'1px solid var(--border)',
       boxShadow:'var(--sh-sm)',
       borderBottom:`3px solid ${c}`,
       position:'relative',
@@ -114,9 +116,9 @@ export const StatCard = ({ label, value, sub, icon: Icon, accent='blue', trend }
 export const Card = ({ children, style, hover = true }) => (
   <div
     style={{
-      background:'#fff',
+      background:'var(--card)',
       borderRadius:12,
-      border:'1px solid #E2E8F0',
+      border:'1px solid var(--border)',
       boxShadow:'var(--sh-sm)',
       overflow:'hidden',
       transition:'transform 200ms ease, box-shadow 200ms ease',
@@ -172,14 +174,14 @@ export const DonutChart = ({ good=0, moderate=0, critical=0 }) => {
   const slices = [{v:good,c:'#10B981'},{v:moderate,c:'#F59E0B'},{v:critical,c:'#EF4444'}]
   let off=0
   return (
-    <div style={{display:'flex',alignItems:'center',gap:24}}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{flexShrink:0}}>
         <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--border)" strokeWidth={14}/>
         {slices.map((s,i)=>{
           const dash=(s.v/total)*circ
           const el=<circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={s.c}
             strokeWidth={13} strokeDasharray={`${dash} ${circ-dash}`}
-            strokeDashoffset={-off} transform="rotate(-90 50 50)"/>
+            strokeDashoffset={-off} transform={`rotate(-90 ${cx} ${cy})`}/>
           off+=dash; return el
         })}
         <text x={cx} y={cy-6} textAnchor="middle" fontSize="18" fontWeight="900"
@@ -205,7 +207,7 @@ export const DonutChart = ({ good=0, moderate=0, critical=0 }) => {
 export const Btn = ({children,onClick,variant='primary',size='md',disabled,type='button',style={}}) => {
   const V = {
     primary: {background:'var(--blue)',color:'#fff',border:'none'},
-    outline: {background:'#fff',color:'var(--text)',border:'1.5px solid var(--border)'},
+    outline: {background:'var(--card)',color:'var(--text)',border:'1.5px solid var(--border)'},
     danger:  {background:'var(--red)',color:'#fff',border:'none'},
     ghost:   {background:'transparent',color:'var(--text2)',border:'none'},
     success: {background:'var(--green)',color:'#fff',border:'none'},
@@ -235,7 +237,7 @@ export const Btn = ({children,onClick,variant='primary',size='md',disabled,type=
 
 /* ── INPUT / SELECT / TEXTAREA ─────────────────────────────────── */
 const IS = {padding:'9px 12px',border:'1.5px solid var(--border)',borderRadius:9,
-  fontSize:13.5,color:'var(--text)',outline:'none',background:'#fff',
+  fontSize:13.5,color:'var(--text)',outline:'none',background:'var(--card)',
   transition:'border-color .15s',width:'100%'}
 const focus = e => e.target.style.borderColor='var(--blue)'
 const blur  = e => e.target.style.borderColor='var(--border)'
@@ -267,17 +269,17 @@ export const Modal = ({open,onClose,title,children,width=560}) => {
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,.55)',
       display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,
       backdropFilter:'blur(4px)'}} onClick={onClose}>
-      <div style={{background:'#fff',borderRadius:18,width,maxWidth:'96vw',maxHeight:'90vh',
+      <div style={{background:'var(--card)',borderRadius:18,width,maxWidth:'96vw',maxHeight:'90vh',
         overflowY:'auto',boxShadow:'var(--sh-lg)',animation:'modalIn .22s ease'}}
         onClick={e=>e.stopPropagation()}>
         <div style={{padding:'22px 26px 0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <h2 style={{fontFamily:'Syne',fontSize:18,fontWeight:800}}>{title}</h2>
+          <h2 style={{fontSize:17,fontWeight:700,color:'var(--text)'}}>{title}</h2>
           <button onClick={onClose} style={{width:32,height:32,borderRadius:8,
-            border:'1.5px solid var(--border)',background:'#fff',cursor:'pointer',
+            border:'1.5px solid var(--border)',background:'var(--card)',cursor:'pointer',
             fontSize:17,color:'var(--text2)',display:'flex',alignItems:'center',justifyContent:'center',
             transition:'all .15s'}}
             onMouseEnter={e=>{e.currentTarget.style.background='var(--red)';e.currentTarget.style.color='#fff'}}
-            onMouseLeave={e=>{e.currentTarget.style.background='#fff';e.currentTarget.style.color='var(--text2)'}}>
+            onMouseLeave={e=>{e.currentTarget.style.background='var(--card)';e.currentTarget.style.color='var(--text2)'}}>
             <X size={16}/>
           </button>
         </div>
@@ -306,8 +308,8 @@ export const Table = ({columns,data,empty='No records found',loading}) => (
               letterSpacing:'0.05em',
               padding:'10px 14px',
               textAlign:'left',
-              background:'#F8FAFC',
-              borderBottom:'1px solid #E2E8F0',
+              background:'var(--bg2)',
+              borderBottom:'1px solid var(--border)',
               whiteSpace:'nowrap',
             }}
           >
@@ -323,9 +325,9 @@ export const Table = ({columns,data,empty='No records found',loading}) => (
         ) : data.map((row,i)=>(
           <tr
             key={i}
-            style={{height:48, background: i%2===1 ? '#FAFAFA' : '#fff', transition:'background 150ms ease'}}
-            onMouseEnter={e=>{e.currentTarget.style.background='#F8FAFC'}}
-            onMouseLeave={e=>{e.currentTarget.style.background=i%2===1 ? '#FAFAFA' : '#fff'}}
+            style={{height:48, background: i%2===1 ? 'var(--bg)' : 'var(--card)', transition:'background 150ms ease'}}
+            onMouseEnter={e=>{e.currentTarget.style.background='var(--bg2)'}}
+            onMouseLeave={e=>{e.currentTarget.style.background=i%2===1 ? 'var(--bg)' : 'var(--card)'}}
           >
             {columns.map((c,colIdx)=>(
               <td
@@ -337,7 +339,7 @@ export const Table = ({columns,data,empty='No records found',loading}) => (
                   verticalAlign:'middle',
                   ...(c.style || {}),
                   ...(colIdx===0
-                    ? { position:'sticky', left:0, background:'#fff', zIndex:2 }
+                    ? { position:'sticky', left:0, background:'var(--card)', zIndex:2 }
                     : {}),
                 }}
               >
@@ -408,9 +410,34 @@ export const Spinner = ({size=24,color='var(--blue)'}) => (
   <Loader2 size={size} color={color} style={{animation:'spin 1s linear infinite'}}/>
 )
 export const PageLoad = () => (
-  <div style={{display:'flex',alignItems:'center',justifyContent:'center',
-    height:'100vh',flexDirection:'column',gap:14}}>
-    <Spinner size={38}/><span style={{color:'var(--text2)',fontSize:14}}>Loading ECRM...</span>
+  <div style={{
+    display:'flex', alignItems:'center', justifyContent:'center',
+    height:'100vh', flexDirection:'column', gap:18,
+    background:'linear-gradient(135deg, #0F172A 0%, #1E3A5F 45%, #0F172A 100%)',
+    position:'relative', overflow:'hidden',
+  }}>
+    {[
+      { w:120, t:40, l:60, o:.12 },
+      { w:80, t:'auto', b:80, r:100, o:.1 },
+      { w:60, t:120, r:'20%', o:.08 },
+      { w:100, b:120, l:'15%', o:.1 },
+    ].map((s,i) => (
+      <div key={i} style={{
+        position:'absolute', width:s.w, height:s.w, borderRadius:16,
+        top:s.t, left:s.l, right:s.r, bottom:s.b,
+        background:'linear-gradient(135deg, rgba(59,130,246,.35), rgba(6,182,212,.2))',
+        opacity:s.o, transform:`rotate(${i*15}deg)`,
+      }}/>
+    ))}
+    <div style={{ display:'flex', gap:8, position:'relative', zIndex:1 }}>
+      {[0,1,2].map(i => (
+        <div key={i} style={{
+          width:10, height:10, borderRadius:'50%', background:'#60A5FA',
+          animation:`fadeUp 1s ease ${i*0.2}s infinite alternate`,
+        }}/>
+      ))}
+    </div>
+    <span style={{ color:'rgba(255,255,255,.7)', fontSize:14, position:'relative', zIndex:1 }}>Loading ECRM...</span>
   </div>
 )
 
@@ -427,7 +454,7 @@ export const Empty = ({icon='📭',title='Nothing here',desc}) => (
 export const PageHeader = ({title,sub,action}) => (
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:22}}>
     <div>
-      <h1 style={{fontFamily:'Inter',fontSize:22,fontWeight:700,color:'#0F172A'}}>{title}</h1>
+      <h1 style={{fontFamily:'Inter',fontSize:22,fontWeight:700,color:'var(--text)'}}>{title}</h1>
       {sub&&<p style={{fontSize:13,color:'var(--text2)',marginTop:3}}>{sub}</p>}
     </div>
     {action}

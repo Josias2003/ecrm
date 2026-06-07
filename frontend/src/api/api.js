@@ -24,7 +24,7 @@ client.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem(TOKEN_KEY)
-      window.location.href = '/login'
+      window.location.href = '/'
     }
     return Promise.reject(error)
   }
@@ -38,17 +38,21 @@ export const authAPI = {
   },
   me: () => client.get('/api/auth/me'),
   logout: () => client.post('/api/auth/logout'),
+  updateProfile: (data) => client.patch('/api/auth/me', data),
+  changePassword: (data) => client.post('/api/auth/change-password', data),
+  forgotPassword: (email) => client.post('/api/auth/forgot-password', { email }),
+  resetPassword: (data) => client.post('/api/auth/reset-password', data),
 }
 
 export const usersAPI = {
-  list: (skip = 0, limit = 50) => client.get('/api/users', { params: { skip, limit } }),
+  list: (skip = 0, limit = 50) => client.get('/api/users/', { params: { skip, limit } }),
   create: (data) => client.post('/api/users', data),
   update: (id, data) => client.patch(`/api/users/${id}`, data),
   delete: (id) => client.delete(`/api/users/${id}`),
 }
 
 export const schoolsAPI = {
-  list: (params) => client.get('/api/schools', { params }),
+  list: (params) => client.get('/api/schools/', { params }),
   get: (id) => client.get(`/api/schools/${id}`),
   create: (data) => client.post('/api/schools', data),
   update: (id, data) => client.patch(`/api/schools/${id}`, data),
@@ -59,7 +63,7 @@ export const schoolsAPI = {
 }
 
 export const teachersAPI = {
-  list: (params) => client.get('/api/teachers', { params }),
+  list: (params) => client.get('/api/teachers/', { params }),
   create: (data) => client.post('/api/teachers', data),
   update: (id, data) => client.patch(`/api/teachers/${id}`, data),
   delete: (id) => client.delete(`/api/teachers/${id}`),
@@ -67,14 +71,20 @@ export const teachersAPI = {
 }
 
 export const feedbackAPI = {
-  list: (params) => client.get('/api/feedback', { params }),
+  list: (params) => client.get('/api/feedback/', { params }),
   submit: (data) => client.post('/api/feedback', data),
   update: (id, data) => client.patch(`/api/feedback/${id}`, data),
+  forward: (id) => client.post(`/api/feedback/${id}/forward`),
+  reopen: (id) => client.post(`/api/feedback/${id}/reopen`),
+  messages: (id) => client.get(`/api/feedback/${id}/messages`),
+  sendMessage: (id, data) => client.post(`/api/feedback/${id}/messages`, data),
 }
 
 export const alertsAPI = {
-  list: (params) => client.get('/api/alerts', { params }),
-  resolve: (id) => client.patch(`/api/alerts/${id}/resolve`),
+  list: (params) => client.get('/api/alerts/', { params }),
+  resolve: (id, data) => client.patch(`/api/alerts/${id}/resolve`, data),
+  forward: (id) => client.post(`/api/alerts/${id}/forward`),
+  reopen: (id) => client.post(`/api/alerts/${id}/reopen`),
 }
 
 export const analyticsAPI = {
@@ -87,7 +97,27 @@ export const analyticsAPI = {
 }
 
 export const logsAPI = {
-  list: (params) => client.get('/api/logs', { params }),
+  list: (params) => client.get('/api/logs/', { params }),
+}
+
+export const reportsAPI = {
+  types: () => client.get('/api/reports/types'),
+  preview: (params) => client.get('/api/reports/preview', { params }),
+  export: (params) => client.get('/api/reports/export', { params, responseType: 'blob' }),
+}
+
+export const chatAPI = {
+  rooms: () => client.get('/api/chat/rooms'),
+  messages: (roomId) => client.get(`/api/chat/rooms/${roomId}/messages`),
+  send: (roomId, data) => client.post(`/api/chat/rooms/${roomId}/messages`, data),
+  contacts: () => client.get('/api/chat/contacts'),
+  direct: (userId) => client.post(`/api/chat/direct/${userId}`),
+  presets: () => client.get('/api/chat/presets'),
+  createRoom: (data) => client.post('/api/chat/rooms', data),
+}
+
+export const systemAPI = {
+  healthStats: () => client.get('/api/system/health-stats'),
 }
 
 export const enrollmentAPI = {

@@ -11,7 +11,7 @@ class StatusEnum(str, Enum):
     good="good"; moderate="moderate"; critical="critical"
 
 class FeedbackStatusEnum(str, Enum):
-    pending="pending"; reviewed="reviewed"; resolved="resolved"
+    pending="pending"; reviewed="reviewed"; resolved="resolved"; closed="closed"
 
 # ── AUTH ──────────────────────────────────────────────────────────
 class LoginRequest(BaseModel):
@@ -35,10 +35,18 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
+    password: Optional[str] = None
     role: Optional[RoleEnum] = None
     district: Optional[str] = None
     school_id: Optional[int] = None
     is_active: Optional[bool] = None
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 class UserOut(BaseModel):
     id: int; full_name: str; email: str; role: str
@@ -122,18 +130,50 @@ class FeedbackUpdate(BaseModel):
     status: Optional[FeedbackStatusEnum] = None
     reviewer_note: Optional[str] = None
 
+class FeedbackMessageCreate(BaseModel):
+    content: str
+
+class FeedbackMessageOut(BaseModel):
+    id: int; feedback_id: int; user_id: int; content: str
+    author_name: Optional[str] = None
+    author_role: Optional[str] = None
+    created_at: datetime
+    class Config: from_attributes = True
+
 class FeedbackOut(BaseModel):
     id: int; school_id: int; issue_type: str; description: str
     reporter_name: Optional[str]; reporter_contact: Optional[str]
     status: str; reviewer_note: Optional[str]
+    forwarded_to_reb: bool = False
+    school_name: Optional[str] = None
+    district: Optional[str] = None
     created_at: datetime; updated_at: Optional[datetime]
     class Config: from_attributes = True
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
+class ChatRoomCreate(BaseModel):
+    title: str
+    preset: Optional[str] = None
+    member_ids: Optional[List[int]] = None
 
 # ── ALERT ─────────────────────────────────────────────────────────
 class AlertOut(BaseModel):
     id: int; school_id: int; alert_type: str; level: str
-    message: str; is_resolved: bool; created_at: datetime
+    message: str; is_resolved: bool; forwarded_to_reb: bool = False
+    school_name: Optional[str] = None
+    district: Optional[str] = None
+    created_at: datetime
     class Config: from_attributes = True
+
+class AlertResolve(BaseModel):
+    resolution_note: str
 
 # ── ENROLLMENT HISTORY ────────────────────────────────────────────
 class EnrollmentHistoryOut(BaseModel):
@@ -145,8 +185,52 @@ class EnrollmentHistoryOut(BaseModel):
 class AuditLogOut(BaseModel):
     id: int; user_id: Optional[int]; action_type: str
     description: str; entity: Optional[str]; entity_id: Optional[int]
+    ip_address: Optional[str] = None
+    user_name: Optional[str] = None
     created_at: datetime
     class Config: from_attributes = True
+
+class ChatRoomOut(BaseModel):
+    id: int; title: str; scope: str
+    target_role: Optional[str] = None
+    district: Optional[str]; school_id: Optional[int]
+    created_at: datetime
+    class Config: from_attributes = True
+
+class ChatContactOut(BaseModel):
+    id: int; full_name: str; role: str
+    district: Optional[str] = None
+    class Config: from_attributes = True
+
+class ChatMessageOut(BaseModel):
+    id: int; room_id: int; user_id: int; content: str
+    reply_to_id: Optional[int] = None
+    reply_author_name: Optional[str] = None
+    reply_content: Optional[str] = None
+    author_name: Optional[str] = None
+    author_role: Optional[str] = None
+    created_at: datetime
+    class Config: from_attributes = True
+
+class ChatMessageCreate(BaseModel):
+    content: str
+    reply_to_id: Optional[int] = None
+
+class ReportMeta(BaseModel):
+    type: str
+    label: str
+    description: str
+
+class ReportPreview(BaseModel):
+    type: str
+    label: str
+    description: str
+    period_from: str
+    period_to: str
+    generated_at: datetime
+    summary: dict
+    insights: List[str] = []
+    rows: List[dict] = []
 
 # ── ANALYTICS ─────────────────────────────────────────────────────
 class DistrictStats(BaseModel):

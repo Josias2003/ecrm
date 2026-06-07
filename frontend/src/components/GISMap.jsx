@@ -126,10 +126,11 @@ function createPopupContent(school) {
   `
 }
 
-export default function GISMap({ schools = [], onSchoolClick, filterDistrict, height = 500 }) {
+export default function GISMap({ schools = [], onSchoolClick, filterDistrict, highlightSchoolId, height = 500 }) {
   const mapRef = useRef(null)
   const instanceRef = useRef(null)
   const markersRef = useRef([])
+  const markerBySchoolRef = useRef({})
   const clusterRef = useRef(null)
   const resizeObserverRef = useRef(null)
   const [mapReady, setMapReady] = useState(false)
@@ -248,6 +249,7 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, he
 
     markersRef.current.forEach(marker => marker.remove())
     markersRef.current = []
+    markerBySchoolRef.current = {}
     if (cluster) cluster.clearLayers()
 
     const filtered = schools.filter(school => {
@@ -277,6 +279,7 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, he
       else marker.addTo(map)
 
       markersRef.current.push(marker)
+      markerBySchoolRef.current[school.id] = marker
       bounds.push([latitude, longitude])
     })
 
@@ -293,6 +296,16 @@ export default function GISMap({ schools = [], onSchoolClick, filterDistrict, he
     requestAnimationFrame(() => map.invalidateSize())
     setStats(nextStats)
   }, [mapReady, schools, filterDistrict, onSchoolClick])
+
+  useEffect(() => {
+    if (!mapReady || !instanceRef.current || !highlightSchoolId) return
+    const { map } = instanceRef.current
+    const marker = markerBySchoolRef.current[highlightSchoolId]
+    if (!marker) return
+    const latLng = marker.getLatLng()
+    map.setView(latLng, Math.max(map.getZoom(), 14), { animate: true })
+    marker.openPopup()
+  }, [mapReady, highlightSchoolId])
 
   const statusMessage = mapError
     || (!mapReady ? 'Loading GIS map...' : tilesLoading ? 'Loading base map tiles...' : stats.total === 0 ? 'No mapped schools match the current filters.' : '')

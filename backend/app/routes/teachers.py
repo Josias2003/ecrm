@@ -13,12 +13,24 @@ def log_action(db, user_id, action, desc, entity=None, eid=None, ip_address=None
     db.add(AuditLog(user_id=user_id, action_type=action,
                     description=desc, entity=entity, entity_id=eid, ip_address=ip_address))
 
-@teachers_router.get("/", response_model=List[TeacherOut])
+def _teacher_school(db, school_id):
+    return db.query(School).filter(School.id == school_id).first()
+
+def _assert_teacher_scope(cu, school: School):
+    if cu.role == "school" and cu.school_id and school.id != cu.school_id:
+        raise HTTPException(403, "You can only manage teachers at your own school")
+    if cu.role == "district" and cu.district and school.district != cu.district:
+        raise HTTPException(403, "You can only manage teachers in your district")
+
+@teachers_router.get("", response_model=List[TeacherOut])
 def list_teachers(school_id: Optional[int]=Query(None),
                   district: Optional[str]=Query(None),
                   status: Optional[str]=Query(None),
                   skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
                   db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    if cu.role in ("admin", "enumerator", "community"):
+        raise HTTPException(403, "Your role cannot access teacher records")
+    # reb: read-only national view
     q = db.query(Teacher).join(School)
     if cu.role == "school" and cu.school_id:
         q = q.filter(Teacher.school_id == cu.school_id)
@@ -34,7 +46,11 @@ def list_teachers(school_id: Optional[int]=Query(None),
 
 @teachers_router.post("/", response_model=TeacherOut, status_code=201)
 def create_teacher(payload: TeacherCreate, request: Request, db: Session = Depends(get_db),
-                   cu=Depends(require_roles("admin","reb","district","school","enumerator"))):
+                   cu=Depends(require_roles("district","school"))):
+    school = _teacher_school(db, payload.school_id)
+    if not school:
+        raise HTTPException(404, "School not found")
+    _assert_teacher_scope(cu, school)
     t = Teacher(**payload.model_dump())
     db.add(t)
     ip = get_client_ip(request)
@@ -45,10 +61,12 @@ def create_teacher(payload: TeacherCreate, request: Request, db: Session = Depen
 
 @teachers_router.patch("/{tid}", response_model=TeacherOut)
 def update_teacher(tid: int, payload: TeacherUpdate, request: Request, db: Session = Depends(get_db),
-                   cu=Depends(get_current_user)):
-    t = db.query(Teacher).filter(Teacher.id == tid).first()
-    if not t:
+                   cu=Depends(require_roles("district","school"))):
+    row = db.query(Teacher, School).join(School).filter(Teacher.id == tid).first()
+    if not row:
         raise HTTPException(404, "Teacher not found")
+    t, school = row
+    _assert_teacher_scope(cu, school)
     for k, v in payload.model_dump(exclude_none=True).items():
         setattr(t, k, v)
     ip = get_client_ip(request)
@@ -59,10 +77,13 @@ def update_teacher(tid: int, payload: TeacherUpdate, request: Request, db: Sessi
 
 @teachers_router.delete("/{tid}")
 def delete_teacher(tid: int, request: Request, db: Session = Depends(get_db),
-                   cu=Depends(require_roles("admin","district","school"))):
+                   cu=Depends(require_roles("district","school"))):
     t = db.query(Teacher).filter(Teacher.id == tid).first()
     if not t:
         raise HTTPException(404, "Teacher not found")
+    school = _teacher_school(db, t.school_id)
+    if school:
+        _assert_teacher_scope(cu, school)
     db.delete(t)
     ip = get_client_ip(request)
     log_action(db, cu.id, "DELETE", f"Removed teacher {t.full_name}", "Teacher", tid, ip_address=ip)
@@ -72,6 +93,8 @@ def delete_teacher(tid: int, request: Request, db: Session = Depends(get_db),
 @teachers_router.get("/workload/analysis")
 def workload_analysis(district: Optional[str]=Query(None),
                       db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    if cu.role in ("admin", "enumerator", "community", "school", "reb"):
+        raise HTTPException(403, "Your role cannot access teacher workload analysis")
     q = db.query(School)
     if cu.role == "district" and cu.district:
         q = q.filter(School.district == cu.district)

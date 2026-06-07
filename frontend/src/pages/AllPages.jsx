@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import SchoolFormFields from '../components/SchoolFormFields'
+import { formatLabel } from '../utils/format'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, usersAPI, logsAPI } from '../api/api'
 import { useAuth } from '../store/auth'
@@ -7,8 +10,18 @@ import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, Table,
          ProgressBar, DonutChart, Checkbox } from '../components/UI'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
          CartesianGrid, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts'
-import { School, Users, BookOpen, AlertTriangle, TrendingUp, Download } from 'lucide-react'
+import {
+  School, Users, BookOpen, AlertTriangle, TrendingUp, Download,
+  Building2, Armchair, CircleCheck, Droplets, Zap, Monitor, MapPin,
+  Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
+
+const textMatches = (query, values) => {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return values.some(value => String(value ?? '').toLowerCase().includes(q))
+}
 
 // ════════════════════════════════════════════════════════════════════
 // SCHOOLS PAGE
@@ -31,6 +44,8 @@ const EMPTY_SCHOOL = {
 export function SchoolsPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const q = searchParams.get('q') || ''
   const [fd, setFd] = useState(user?.role==='district'?user.district:'')
   const [fs, setFs] = useState('')
   const [ft, setFt] = useState('')
@@ -44,14 +59,23 @@ export function SchoolsPage() {
     queryKey:['schools',fd,fs,ft],
     queryFn:()=>schoolsAPI.list({district:fd||undefined,status:fs||undefined,school_type:ft||undefined}).then(r=>r.data)
   })
+  const visibleSchools = schools.filter(s => textMatches(q, [
+    s.name, s.district, s.sector, s.school_type, s.ownership, s.status,
+  ]))
 
   const createM = useMutation({ mutationFn:d=>schoolsAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['schools']); setAddOpen(false); toast.success('School registered') } })
   const updateM = useMutation({ mutationFn:({id,d})=>schoolsAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['schools']); setEditS(null); toast.success('School updated') } })
   const deleteM = useMutation({ mutationFn:id=>schoolsAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['schools']); toast.success('School removed') } })
 
-  const set = k => e => setForm(p=>({...p,[k]:e.target.type==='checkbox'?e.target.checked:e.target.type==='number'?Number(e.target.value)||0:e.target.value}))
   const openEdit = s => { setForm({...s,latitude:s.latitude||'',longitude:s.longitude||'',distance_to_road_km:s.distance_to_road_km||''}); setEditS(s) }
-  const openAdd = () => { setForm(EMPTY_SCHOOL); setAddOpen(true) }
+  const openAdd = () => { setForm({...EMPTY_SCHOOL, district: user?.role==='district'?user.district:EMPTY_SCHOOL.district}); setAddOpen(true) }
+  const saveSchool = useCallback(() => {
+    if (!form.name?.trim()) { toast.error('School name is required'); return }
+    if (!form.sector) { toast.error('Sector is required'); return }
+    const payload = { ...form, latitude: form.latitude === '' ? null : Number(form.latitude), longitude: form.longitude === '' ? null : Number(form.longitude) }
+    if (editS) updateM.mutate({ id: editS.id, d: payload })
+    else createM.mutate(payload)
+  }, [form, editS, createM, updateM])
 
   const exportCSV = async () => {
     try {
@@ -62,48 +86,39 @@ export function SchoolsPage() {
     } catch { toast.error('Export failed') }
   }
 
-  const canEdit = ['admin','reb','district','enumerator'].includes(user?.role)
-  const canDel  = user?.role === 'admin'
+  const canEditSchool = (s) => {
+    if (user?.role === 'district' || user?.role === 'enumerator') return true
+    if (user?.role === 'school') return s.id === user.school_id
+    return false
+  }
+  const canEdit = user?.role === 'district' || user?.role === 'enumerator' || user?.role === 'school'
+  const canDel  = user?.role === 'district'
+  const lockDistrict = ['district', 'enumerator'].includes(user?.role)
+  const schoolAutoOpened = useRef(false)
 
-  const SchoolForm = () => (
-    <>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
-        <Field label="School Name *"><Input placeholder="e.g. GS Remera" value={form.name} onChange={set('name')}/></Field>
-        <Field label="District"><Select options={DISTRICTS} value={form.district} onChange={set('district')}/></Field>
-        <Field label="Sector"><Select options={['',...(SECTORS[form.district]||[])]} value={form.sector} onChange={set('sector')}/></Field>
-        <Field label="Cell"><Input placeholder="Cell name" value={form.cell} onChange={set('cell')}/></Field>
-        <Field label="Type"><Select options={['Primary','Secondary']} value={form.school_type} onChange={set('school_type')}/></Field>
-        <Field label="Ownership"><Select options={['Public','Private','Faith-based']} value={form.ownership} onChange={set('ownership')}/></Field>
-        <Field label="GPS Latitude"><Input type="number" step="0.00001" placeholder="-1.95000" value={form.latitude} onChange={set('latitude')}/></Field>
-        <Field label="GPS Longitude"><Input type="number" step="0.00001" placeholder="30.08500" value={form.longitude} onChange={set('longitude')}/></Field>
-        <Field label="Students (Boys)"><Input type="number" value={form.students_boys} onChange={set('students_boys')}/></Field>
-        <Field label="Students (Girls)"><Input type="number" value={form.students_girls} onChange={set('students_girls')}/></Field>
-        <Field label="Teachers (Male)"><Input type="number" value={form.teachers_male} onChange={set('teachers_male')}/></Field>
-        <Field label="Teachers (Female)"><Input type="number" value={form.teachers_female} onChange={set('teachers_female')}/></Field>
-        <Field label="Classrooms (Total)"><Input type="number" value={form.classrooms} onChange={set('classrooms')}/></Field>
-        <Field label="Classrooms (Usable)"><Input type="number" value={form.classrooms_good} onChange={set('classrooms_good')}/></Field>
-        <Field label="Textbooks"><Input type="number" value={form.textbooks} onChange={set('textbooks')}/></Field>
-        <Field label="Desks"><Input type="number" value={form.desks} onChange={set('desks')}/></Field>
-        <Field label="Toilets (Boys)"><Input type="number" value={form.toilets_boys} onChange={set('toilets_boys')}/></Field>
-        <Field label="Toilets (Girls)"><Input type="number" value={form.toilets_girls} onChange={set('toilets_girls')}/></Field>
-        <Field label="Distance to Road (km)"><Input type="number" step="0.1" value={form.distance_to_road_km} onChange={set('distance_to_road_km')}/></Field>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:18}}>
-        {[['Library','has_library'],['ICT Lab','has_ict_lab'],['Science Lab','has_science_lab'],
-          ['Water','has_water'],['Electricity','has_electricity'],['Internet','has_internet'],
-          ['Fence','has_fence'],['Canteen','has_canteen']].map(([l,k])=>(
-          <Checkbox key={k} label={l} checked={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.checked}))}/>
-        ))}
-      </div>
-    </>
-  )
+  useEffect(() => {
+    if (schoolAutoOpened.current) return
+    if (user?.role === 'school' && schools.length === 1) {
+      schoolAutoOpened.current = true
+      const s = schools[0]
+      setForm({ ...s, latitude: s.latitude || '', longitude: s.longitude || '', distance_to_road_km: s.distance_to_road_km || '' })
+      setEditS(s)
+    }
+  }, [schools, user?.role])
 
   return (
     <div>
-      <PageHeader title="Schools" sub={`${schools.length} schools found`}
-        action={<div style={{display:'flex',gap:10}}><Btn variant="outline" onClick={exportCSV}><Download size={15}/> CSV</Btn>{canEdit&&<Btn onClick={openAdd}>+ Register School</Btn>}</div>}/>
+      <PageHeader title={user?.role==='school'?'My School':'Schools'}
+        sub={user?.role==='school'?'View and update your school profile':`${visibleSchools.length} schools found${q ? ` for "${q}"` : ''}`}
+        action={<div style={{display:'flex',gap:10}}>
+          {user?.role!=='school'&&<Btn variant="outline" onClick={exportCSV}><Download size={15}/> CSV</Btn>}
+          {canEdit&&user?.role!=='school'&&<Btn onClick={openAdd}>+ Register School</Btn>}
+        </div>}/>
 
       <div style={{display:'flex',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+        <Input placeholder="Search school, sector, district..." value={q}
+          onChange={e=>setSearchParams(e.target.value ? { q:e.target.value } : {})}
+          style={{maxWidth:280}}/>
         <select value={fd} onChange={e=>setFd(e.target.value)} disabled={user?.role==='district'}
           style={{padding:'7px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontSize:12.5,background:'#fff',cursor:'pointer'}}>
           <option value="">All Districts</option>
@@ -135,17 +150,17 @@ export function SchoolsPage() {
             {key:'id',label:'Actions',render:(v,row)=>(
               <div style={{display:'flex',gap:5}}>
                 <Btn size="sm" variant="ghost" onClick={()=>setDetailS(row)}>View</Btn>
-                {canEdit&&<Btn size="sm" variant="outline" onClick={()=>openEdit(row)}>Edit</Btn>}
+                {canEditSchool(row)&&<Btn size="sm" variant="outline" onClick={()=>openEdit(row)}>Edit</Btn>}
                 {canDel&&<Btn size="sm" variant="danger" onClick={()=>{if(confirm('Delete?'))deleteM.mutate(v)}}>Del</Btn>}
               </div>
             )},
-          ]} data={schools} empty="No schools found"/>
+          ]} data={visibleSchools} empty="No schools found"/>
         </CardBody></Card>
       )}
 
       {view==='cards'&&(
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14}}>
-          {schools.map(s=>{
+          {visibleSchools.map(s=>{
             const stu=(s.students_boys||0)+(s.students_girls||0)
             const tea=(s.teachers_male||0)+(s.teachers_female||0)
             return (
@@ -161,18 +176,30 @@ export function SchoolsPage() {
                   <Badge status={s.status}/>
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
-                  {[['👩‍🎓',stu,'Students'],['👨‍🏫',tea,'Teachers'],['🏫',s.classrooms,'Rooms']].map(([ic,v,l])=>(
-                    <div key={l} style={{background:'var(--bg2)',borderRadius:8,padding:'7px 9px',textAlign:'center'}}>
-                      <div style={{fontSize:14}}>{ic}</div>
-                      <div style={{fontFamily:'Syne',fontSize:16,fontWeight:800}}>{v}</div>
+                  {[
+                    {Icon:Users,v:stu,l:'Students',c:'#2563EB'},
+                    {Icon:UserRound,v:tea,l:'Teachers',c:'#10B981'},
+                    {Icon:Building2,v:s.classrooms,l:'Rooms',c:'#F59E0B'},
+                  ].map(({Icon,v,l,c})=>(
+                    <div key={l} style={{background:'var(--bg2)',borderRadius:8,padding:'8px 9px',textAlign:'center',border:'1px solid var(--border)'}}>
+                      <div style={{display:'flex',justifyContent:'center',marginBottom:4}}><Icon size={14} color={c}/></div>
+                      <div style={{fontSize:15,fontWeight:700,color:'var(--text)'}}>{v}</div>
                       <div style={{fontSize:9.5,color:'var(--text2)'}}>{l}</div>
                     </div>
                   ))}
                 </div>
                 <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  {[['💧',s.has_water],['⚡',s.has_electricity],['📚',s.has_library],['💻',s.has_ict_lab],['📍',s.gps_verified]].map(([ic,v],i)=>(
-                    <span key={i} style={{padding:'2px 7px',borderRadius:6,fontSize:11,fontWeight:600,
-                      background:v?'rgba(16,185,129,.1)':'rgba(239,68,68,.1)',color:v?'#065F46':'#991B1B'}}>{ic}</span>
+                  {[
+                    {Icon:Droplets,v:s.has_water,l:'Water'},
+                    {Icon:Zap,v:s.has_electricity,l:'Power'},
+                    {Icon:BookOpen,v:s.has_library,l:'Library'},
+                    {Icon:Monitor,v:s.has_ict_lab,l:'ICT'},
+                    {Icon:MapPin,v:s.gps_verified,l:'GPS'},
+                  ].map(({Icon,v,l})=>(
+                    <span key={l} title={l} style={{padding:'4px 7px',borderRadius:6,display:'inline-flex',alignItems:'center',
+                      background:v?'rgba(16,185,129,.1)':'rgba(239,68,68,.1)'}}>
+                      <Icon size={12} color={v?'#10B981':'#EF4444'}/>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -188,37 +215,54 @@ export function SchoolsPage() {
             <Badge status={detailS.status} size="lg"/>
             <Badge status={detailS.school_type} size="lg"/>
             <Badge status={detailS.ownership} size="lg"/>
-            {detailS.gps_verified&&<Badge status="good" label="📍 GPS Verified" size="lg"/>}
+            {detailS.gps_verified&&<Badge status="good" label="GPS Verified" size="lg"/>}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:16}}>
-            {[['Students (Boys)',detailS.students_boys,'👦'],['Students (Girls)',detailS.students_girls,'👧'],
-              ['Teachers (M)',detailS.teachers_male,'👨‍🏫'],['Teachers (F)',detailS.teachers_female,'👩‍🏫'],
-              ['Classrooms',detailS.classrooms,'🏫'],['Usable',detailS.classrooms_good,'✅'],
-              ['Textbooks',detailS.textbooks,'📚'],['Desks',detailS.desks,'🪑'],
-              ['Toilets (B)',detailS.toilets_boys,'🚻'],['Toilets (G)',detailS.toilets_girls,'🚻'],
-            ].map(([l,v,ic])=>(
-              <div key={l} style={{background:'var(--bg2)',borderRadius:9,padding:'10px 12px'}}>
-                <div style={{fontSize:17,marginBottom:2}}>{ic}</div>
-                <div style={{fontFamily:'Syne',fontSize:20,fontWeight:800}}>{v||0}</div>
-                <div style={{fontSize:10,color:'var(--text2)'}}>{l}</div>
+            {[
+              {l:'Students (Boys)',v:detailS.students_boys,Icon:Users,c:'#2563EB'},
+              {l:'Students (Girls)',v:detailS.students_girls,Icon:Users,c:'#EC4899'},
+              {l:'Teachers (M)',v:detailS.teachers_male,Icon:UserRound,c:'#10B981'},
+              {l:'Teachers (F)',v:detailS.teachers_female,Icon:UserRound,c:'#8B5CF6'},
+              {l:'Classrooms',v:detailS.classrooms,Icon:Building2,c:'#F59E0B'},
+              {l:'Usable',v:detailS.classrooms_good,Icon:CircleCheck,c:'#22C55E'},
+              {l:'Textbooks',v:detailS.textbooks,Icon:BookOpen,c:'#3B82F6'},
+              {l:'Desks',v:detailS.desks,Icon:Armchair,c:'#6366F1'},
+              {l:'Toilets (B)',v:detailS.toilets_boys,Icon:Users,c:'#06B6D4'},
+              {l:'Toilets (G)',v:detailS.toilets_girls,Icon:Users,c:'#F472B6'},
+            ].map(({l,v,Icon,c})=>(
+              <div key={l} style={{background:'var(--bg2)',borderRadius:9,padding:'10px 12px',border:'1px solid var(--border)'}}>
+                <div style={{width:28,height:28,borderRadius:7,background:`${c}18`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:6}}>
+                  <Icon size={14} color={c}/>
+                </div>
+                <div style={{fontSize:18,fontWeight:700,color:'var(--text)'}}>{v||0}</div>
+                <div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{l}</div>
               </div>
             ))}
           </div>
           <div style={{display:'flex',gap:7,flexWrap:'wrap',marginBottom:14}}>
-            {[['Library',detailS.has_library],['ICT Lab',detailS.has_ict_lab],['Science Lab',detailS.has_science_lab],
-              ['Water',detailS.has_water],['Electricity',detailS.has_electricity],
-              ['Internet',detailS.has_internet],['Fence',detailS.has_fence],['Canteen',detailS.has_canteen]].map(([l,v])=>(
-              <span key={l} style={{padding:'4px 11px',borderRadius:8,fontSize:12,fontWeight:600,
-                background:v?'rgba(16,185,129,.1)':'rgba(239,68,68,.1)',color:v?'#065F46':'#991B1B'}}>{v?'✓':'✗'} {l}</span>
+            {[
+              {l:'Library',v:detailS.has_library,Icon:Library},
+              {l:'ICT Lab',v:detailS.has_ict_lab,Icon:Monitor},
+              {l:'Science Lab',v:detailS.has_science_lab,Icon:FlaskConical},
+              {l:'Water',v:detailS.has_water,Icon:Droplets},
+              {l:'Electricity',v:detailS.has_electricity,Icon:Zap},
+              {l:'Internet',v:detailS.has_internet,Icon:Globe},
+              {l:'Fence',v:detailS.has_fence,Icon:Lock},
+              {l:'Canteen',v:detailS.has_canteen,Icon:UtensilsCrossed},
+            ].map(({l,v,Icon})=>(
+              <span key={l} style={{padding:'5px 11px',borderRadius:8,fontSize:12,fontWeight:600,display:'inline-flex',alignItems:'center',gap:6,
+                background:v?'rgba(16,185,129,.1)':'rgba(239,68,68,.1)',color:v?'#065F46':'#991B1B'}}>
+                <Icon size={13} color={v?'#10B981':'#EF4444'}/>{l}
+              </span>
             ))}
           </div>
-          {detailS.latitude&&<div style={{background:'var(--bg2)',borderRadius:9,padding:'10px 13px',fontSize:12.5}}>
+          {detailS.latitude&&<div style={{background:'var(--bg2)',borderRadius:9,padding:'10px 13px',fontSize:12.5,border:'1px solid var(--border)'}}>
             <div style={{fontWeight:600,color:'var(--text2)',marginBottom:3}}>GPS COORDINATES</div>
-            <div style={{fontFamily:'monospace'}}>{detailS.latitude}°S, {detailS.longitude}°E</div>
-            {detailS.distance_to_road_km&&<div style={{marginTop:4,color:'var(--text2)'}}>🛣️ {detailS.distance_to_road_km} km to road</div>}
+            <div style={{fontFamily:'monospace',fontSize:12}}>{detailS.latitude}°, {detailS.longitude}°</div>
+            {detailS.distance_to_road_km&&<div style={{marginTop:4,color:'var(--text2)',fontSize:12}}>{detailS.distance_to_road_km} km to road</div>}
           </div>}
-          {canEdit&&<div style={{display:'flex',gap:10,marginTop:16,justifyContent:'flex-end'}}>
-            <Btn variant="outline" onClick={()=>{openEdit(detailS);setDetailS(null)}}>✏️ Edit School</Btn>
+          {canEditSchool(detailS)&&<div style={{display:'flex',gap:10,marginTop:16,justifyContent:'flex-end'}}>
+            <Btn variant="outline" onClick={()=>{openEdit(detailS);setDetailS(null)}}>Edit School</Btn>
           </div>}
         </>)}
       </Modal>
@@ -227,10 +271,10 @@ export function SchoolsPage() {
       {(addOpen||editS)&&(
         <Modal open width={700} onClose={()=>{setAddOpen(false);setEditS(null)}}
           title={editS?`Edit — ${editS.name}`:'Register New School'}>
-          <SchoolForm/>
+          <SchoolFormFields form={form} setForm={setForm} lockDistrict={lockDistrict} />
           <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
             <Btn variant="outline" onClick={()=>{setAddOpen(false);setEditS(null)}}>Cancel</Btn>
-            <Btn onClick={()=>editS?updateM.mutate({id:editS.id,d:form}):createM.mutate(form)}
+            <Btn onClick={saveSchool}
               disabled={createM.isPending||updateM.isPending}>
               {createM.isPending||updateM.isPending?'Saving...':editS?'Update School':'Register School'}
             </Btn>
@@ -247,6 +291,8 @@ export function SchoolsPage() {
 export function TeachersPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const q = searchParams.get('q') || ''
   const [schoolFilter, setSchoolFilter] = useState(user?.school_id||'')
   const [statusFilter, setStatusFilter] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -262,6 +308,11 @@ export function TeachersPage() {
     queryFn:()=>teachersAPI.workload({}).then(r=>r.data)
   })
   const { data: schools=[] } = useQuery({ queryKey:['schools-sel'], queryFn:()=>schoolsAPI.list({}).then(r=>r.data) })
+  const schoolById = Object.fromEntries(schools.map(s => [s.id, s]))
+  const visibleTeachers = teachers.filter(t => textMatches(q, [
+    t.full_name, t.gender, t.subject, t.qualification, t.employment_type,
+    t.status, t.phone, schoolById[t.school_id]?.name,
+  ]))
 
   const addM = useMutation({ mutationFn:d=>teachersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setAddOpen(false); toast.success('Teacher added') } })
   const updM = useMutation({ mutationFn:({id,d})=>teachersAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['teachers']); setEditT(null); toast.success('Teacher updated') } })
@@ -270,7 +321,7 @@ export function TeachersPage() {
   const set = k=>e=>setForm(p=>({...p,[k]:e.target.type==='number'?Number(e.target.value):e.target.value}))
   const qualData = ['A2','A1','A0','Masters','PhD'].map(q=>({name:q,value:teachers.filter(t=>t.qualification===q).length})).filter(d=>d.value>0)
   const COLORS = ['#2563EB','#10B981','#F59E0B','#8B5CF6','#EF4444']
-  const canEdit = ['admin','reb','district','school','enumerator'].includes(user?.role)
+  const canEdit = ['district','school'].includes(user?.role)
 
   const TeacherForm = () => (
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
@@ -381,67 +432,194 @@ export function FeedbackPage() {
   const [statusF, setStatusF] = useState('')
   const [typeF, setTypeF] = useState('')
   const [submitOpen, setSubmitOpen] = useState(false)
+  const [threadOpen, setThreadOpen] = useState(false)
+  const [threadRow, setThreadRow] = useState(null)
+  const [threadText, setThreadText] = useState('')
+  const [actionNote, setActionNote] = useState('')
   const [form, setForm] = useState({school_id:'',issue_type:'Infrastructure',description:'',reporter_name:'',reporter_contact:''})
 
   const { data: feedback=[], isLoading } = useQuery({
     queryKey:['feedback-all',statusF,typeF],
     queryFn:()=>feedbackAPI.list({status:statusF||undefined,issue_type:typeF||undefined}).then(r=>r.data)
   })
-  const { data: schools=[] } = useQuery({ queryKey:['schools-fb'], queryFn:()=>schoolsAPI.list({}).then(r=>r.data) })
+  const { data: schools=[] } = useQuery({
+    queryKey:['schools-fb'],
+    queryFn:()=>schoolsAPI.list({}).then(r=>r.data),
+    enabled: ['community','school'].includes(user?.role),
+  })
+  const { data: threadMessages=[] } = useQuery({
+    queryKey:['feedback-messages',threadRow?.id],
+    queryFn:()=>feedbackAPI.messages(threadRow.id).then(r=>r.data),
+    enabled:!!threadRow?.id && threadOpen,
+    refetchInterval: threadOpen ? 5000 : false,
+  })
 
-  const updM = useMutation({ mutationFn:({id,d})=>feedbackAPI.update(id,d), onSuccess:()=>{ qc.invalidateQueries(['feedback-all']); toast.success('Feedback updated') } })
-  const subM = useMutation({ mutationFn:d=>feedbackAPI.submit(d), onSuccess:()=>{ qc.invalidateQueries(['feedback-all']); setSubmitOpen(false); toast.success('Report submitted') } })
+  const updM = useMutation({
+    mutationFn:({id,d})=>feedbackAPI.update(id,d),
+    onSuccess:()=>{
+      qc.invalidateQueries(['feedback-all'])
+      qc.invalidateQueries(['feedback-messages',threadRow?.id])
+      setActionNote('')
+      toast.success('Issue updated')
+    },
+    onError:e=>toast.error(e.response?.data?.detail||'Update failed'),
+  })
+  const msgM = useMutation({
+    mutationFn:({id,content})=>feedbackAPI.sendMessage(id,{content}),
+    onSuccess:()=>{
+      setThreadText('')
+      qc.invalidateQueries(['feedback-messages',threadRow?.id])
+    },
+    onError:e=>toast.error(e.response?.data?.detail||'Message failed'),
+  })
+  const forwardM = useMutation({
+    mutationFn:id=>feedbackAPI.forward(id),
+    onSuccess:()=>{ qc.invalidateQueries(['feedback-all']); toast.success('Forwarded to REB') },
+    onError:e=>toast.error(e.response?.data?.detail||'Forward failed'),
+  })
+  const reopenM = useMutation({
+    mutationFn:id=>feedbackAPI.reopen(id),
+    onSuccess:()=>{ qc.invalidateQueries(['feedback-all']); toast.success('Issue reopened') },
+    onError:e=>toast.error(e.response?.data?.detail||'Reopen failed'),
+  })
+  const subM = useMutation({
+    mutationFn:d=>feedbackAPI.submit(d),
+    onSuccess:()=>{
+      qc.invalidateQueries(['feedback-all'])
+      setSubmitOpen(false)
+      setForm({school_id:'',issue_type:'Infrastructure',description:'',reporter_name:'',reporter_contact:''})
+      toast.success('Report submitted')
+    },
+    onError:e=>toast.error(e.response?.data?.detail||'Submit failed'),
+  })
 
-  const canReview = ['admin','reb','district'].includes(user?.role)
+  const canReview = ['reb','district'].includes(user?.role)
+  const canSubmit = ['community','school'].includes(user?.role)
+  const canMessage = ['reb','district','community','school'].includes(user?.role)
   const pending = feedback.filter(f=>f.status==='pending').length
+
+  const openThread = (row) => {
+    setThreadRow(row)
+    setActionNote(row.reviewer_note||'')
+    setThreadOpen(true)
+  }
+
+  const submitAction = (type) => {
+    if (!threadRow) return
+    const needsNote = type === 'resolved' || type === 'closed'
+    if (needsNote && actionNote.trim().length < 12) {
+      toast.error('Add a note (min 12 characters) when resolving or closing')
+      return
+    }
+    updM.mutate({
+      id: threadRow.id,
+      d: { status: type, reviewer_note: actionNote.trim() || undefined },
+    })
+  }
+
+  const title = user?.role === 'community' ? 'My Reports'
+    : user?.role === 'school' ? 'My Issues'
+    : user?.role === 'reb' ? 'Forwarded Issues'
+    : 'Feedback & Community Reports'
 
   return (
     <div>
-      <PageHeader title="Feedback & Community Reports"
+      <PageHeader title={title}
         sub={`${feedback.length} total · ${pending} pending`}
-        action={<Btn onClick={()=>setSubmitOpen(true)}>+ Submit Report</Btn>}/>
+        action={canSubmit ? <Btn onClick={()=>setSubmitOpen(true)}>+ Submit Report</Btn> : null}/>
 
-      {pending>0&&canReview&&<Alert type="warning"><strong>{pending} reports</strong> are pending your review and action.</Alert>}
+      {pending>0&&canReview&&<Alert type="warning"><strong>{pending} reports</strong> are pending review.</Alert>}
 
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:22}}>
-        <StatCard label="Pending"  value={feedback.filter(f=>f.status==='pending').length}  sub="Awaiting review" accent="amber" trend="down"/>
-        <StatCard label="Reviewed" value={feedback.filter(f=>f.status==='reviewed').length} sub="Under action"    accent="blue"/>
-        <StatCard label="Resolved" value={feedback.filter(f=>f.status==='resolved').length} sub="Closed"          accent="green"/>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
+        <StatCard label="Pending"  value={feedback.filter(f=>f.status==='pending').length}  sub="Awaiting review" accent="amber"/>
+        <StatCard label="Reviewed" value={feedback.filter(f=>f.status==='reviewed').length} sub="In progress" accent="blue"/>
+        <StatCard label="Resolved" value={feedback.filter(f=>f.status==='resolved').length} sub="Action taken" accent="green"/>
+        <StatCard label="Closed"   value={feedback.filter(f=>f.status==='closed').length}   sub="No action possible" accent="cyan"/>
       </div>
 
       <div style={{display:'flex',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        {['','pending','reviewed','resolved'].map(s=>(
+        {['','pending','reviewed','resolved','closed'].map(s=>(
           <button key={s} onClick={()=>setStatusF(s)}
             style={{padding:'6px 14px',borderRadius:8,fontSize:12.5,fontWeight:600,cursor:'pointer',
               border:`1.5px solid ${statusF===s?'var(--blue)':'var(--border)'}`,
-              background:statusF===s?'var(--blue-lt)':'#fff',
+              background:statusF===s?'var(--blue-lt)':'var(--card)',
               color:statusF===s?'var(--blue)':'var(--text2)'}}>
             {s||'All Statuses'}
           </button>
         ))}
-        <select value={typeF} onChange={e=>setTypeF(e.target.value)}
-          style={{padding:'6px 12px',border:'1.5px solid var(--border)',borderRadius:8,fontSize:12.5,background:'#fff',cursor:'pointer'}}>
-          <option value="">All Types</option>
-          {['Infrastructure','Teacher Absence','Resources','Sanitation','Safety','Administration'].map(t=><option key={t}>{t}</option>)}
-        </select>
       </div>
 
       <Card><CardBody>
         <Table loading={isLoading} columns={[
           {key:'description',label:'Issue',render:v=><span style={{fontSize:12}}>{v?.length>75?v.slice(0,75)+'…':v}</span>},
-          {key:'issue_type',label:'Type',render:v=><Badge status="reviewed" label={v}/>},
+          {key:'issue_type',label:'Type',render:v=><Badge status="reviewed" label={formatLabel(v)}/>},
+          {key:'school_name',label:'School',render:v=>v||'—'},
           {key:'reporter_name',label:'Reporter',render:v=>v||'Anonymous'},
-          {key:'reporter_contact',label:'Contact',render:v=><span style={{fontSize:11.5,color:'var(--text2)'}}>{v||'—'}</span>},
           {key:'created_at',label:'Date',render:v=>v?.slice(0,10)},
-          {key:'status',label:'Status',render:v=><Badge status={v}/>},
-          {key:'id',label:'Actions',render:(v,row)=>(
-            <div style={{display:'flex',gap:5}}>
-              {canReview&&row.status==='pending'&&<Btn size="sm" variant="outline" onClick={()=>updM.mutate({id:v,d:{status:'reviewed'}})}>Review</Btn>}
-              {canReview&&row.status==='reviewed'&&<Btn size="sm" variant="success" onClick={()=>updM.mutate({id:v,d:{status:'resolved'}})}>Resolve</Btn>}
-            </div>
+          {key:'status',label:'Status',render:v=><Badge status={v} label={formatLabel(v)}/>},
+          {key:'id',label:'',render:(v,row)=>(
+            <Btn size="sm" variant="outline" onClick={()=>openThread(row)}>Open</Btn>
           )},
         ]} data={feedback} empty="No feedback found"/>
       </CardBody></Card>
+
+      <Modal open={threadOpen} onClose={()=>{setThreadOpen(false);setThreadRow(null)}} width={640}
+        title={threadRow ? `Issue #${threadRow.id} · ${formatLabel(threadRow.status)}` : 'Issue thread'}>
+        {threadRow && <>
+          <div style={{background:'var(--bg2)',borderRadius:10,padding:12,marginBottom:14,border:'1px solid var(--border)'}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{threadRow.description}</div>
+            <div style={{fontSize:11,color:'var(--text2)'}}>
+              {formatLabel(threadRow.issue_type)} · {threadRow.school_name||'—'} · {threadRow.created_at?.slice(0,10)}
+            </div>
+          </div>
+          <div style={{maxHeight:260,overflowY:'auto',marginBottom:14,paddingRight:4}}>
+            {threadMessages.length===0 && (
+              <p style={{fontSize:12,color:'var(--text3)',textAlign:'center',padding:20}}>No messages yet — start the conversation</p>
+            )}
+            {threadMessages.map(m=>{
+              const mine = m.user_id === user?.id
+              return (
+                <div key={m.id} style={{marginBottom:12,textAlign:mine?'right':'left'}}>
+                  <div style={{fontSize:10,color:'var(--text3)',marginBottom:4}}>{m.author_name} · {formatLabel(m.author_role)}</div>
+                  <div style={{
+                    display:'inline-block',maxWidth:'85%',padding:'10px 12px',borderRadius:12,fontSize:13,
+                    background:mine?'var(--blue)':'var(--bg)',color:mine?'#fff':'var(--text)',
+                    border:mine?'none':'1px solid var(--border)',textAlign:'left',
+                  }}>{m.content}</div>
+                </div>
+              )
+            })}
+          </div>
+          {canMessage && (
+            <div style={{display:'flex',gap:8,marginBottom:14}}>
+              <Textarea value={threadText} onChange={e=>setThreadText(e.target.value)}
+                placeholder="Reply in this thread…" style={{minHeight:44,flex:1}}
+                onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(threadText.trim())msgM.mutate({id:threadRow.id,content:threadText.trim()})}}}/>
+              <Btn onClick={()=>threadText.trim()&&msgM.mutate({id:threadRow.id,content:threadText.trim()})}
+                disabled={!threadText.trim()||msgM.isPending}>Send</Btn>
+            </div>
+          )}
+          {canReview && (
+            <>
+              <Field label="Officer note (required to resolve/close)">
+                <Textarea value={actionNote} onChange={e=>setActionNote(e.target.value)}
+                  placeholder="Status update or resolution details…" style={{minHeight:70}}/>
+              </Field>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:14}}>
+                {threadRow.status==='pending'&&<Btn size="sm" onClick={()=>submitAction('reviewed')} disabled={updM.isPending}>Mark Reviewed</Btn>}
+                {['pending','reviewed'].includes(threadRow.status)&&<>
+                  <Btn size="sm" variant="success" onClick={()=>submitAction('resolved')} disabled={updM.isPending}>Resolve</Btn>
+                  <Btn size="sm" variant="ghost" onClick={()=>submitAction('closed')} disabled={updM.isPending}>Close</Btn>
+                </>}
+                {user?.role==='district'&&!threadRow.forwarded_to_reb&&['reviewed','resolved'].includes(threadRow.status)&&
+                  <Btn size="sm" variant="outline" onClick={()=>forwardM.mutate(threadRow.id)} disabled={forwardM.isPending}>Forward to REB</Btn>}
+                {['resolved','closed'].includes(threadRow.status)&&
+                  <Btn size="sm" variant="outline" onClick={()=>reopenM.mutate(threadRow.id)} disabled={reopenM.isPending}>Reopen</Btn>}
+              </div>
+            </>
+          )}
+        </>}
+      </Modal>
 
       <Modal open={submitOpen} onClose={()=>setSubmitOpen(false)} title="Submit a Report">
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
@@ -453,8 +631,6 @@ export function FeedbackPage() {
             <Select options={['Infrastructure','Teacher Absence','Resources','Sanitation','Safety','Administration']}
               value={form.issue_type} onChange={e=>setForm(p=>({...p,issue_type:e.target.value}))}/>
           </Field>
-          <Field label="Your Name (Optional)"><Input placeholder="Anonymous" value={form.reporter_name} onChange={e=>setForm(p=>({...p,reporter_name:e.target.value}))}/></Field>
-          <Field label="Contact (Optional)"><Input placeholder="+250 7XX XXX XXX" value={form.reporter_contact} onChange={e=>setForm(p=>({...p,reporter_contact:e.target.value}))}/></Field>
           <div style={{gridColumn:'1/-1'}}><Field label="Description *">
             <Textarea placeholder="Describe the issue in detail..." value={form.description}
               onChange={e=>setForm(p=>({...p,description:e.target.value}))} style={{minHeight:100}}/>
@@ -462,8 +638,12 @@ export function FeedbackPage() {
         </div>
         <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:20}}>
           <Btn variant="outline" onClick={()=>setSubmitOpen(false)}>Cancel</Btn>
-          <Btn onClick={()=>subM.mutate({...form,school_id:+form.school_id})} disabled={subM.isPending}>
-            {subM.isPending?'Submitting...':'📨 Submit Report'}
+          <Btn onClick={()=>{
+            if(!form.school_id){toast.error('Select a school');return}
+            if(!form.description?.trim()||form.description.trim().length<12){toast.error('Description must be at least 12 characters');return}
+            subM.mutate({...form,school_id:+form.school_id})
+          }} disabled={subM.isPending}>
+            {subM.isPending?'Submitting...':'Submit Report'}
           </Btn>
         </div>
       </Modal>
@@ -479,20 +659,43 @@ export function AlertsPage() {
   const qc = useQueryClient()
   const [levelF, setLevelF] = useState('')
   const [resolved, setResolved] = useState(false)
+  const [resolveOpen, setResolveOpen] = useState(false)
+  const [resolveId, setResolveId] = useState(null)
+  const [resolveNote, setResolveNote] = useState('')
 
   const { data: alerts=[], isLoading } = useQuery({
     queryKey:['alerts-page',levelF,resolved],
     queryFn:()=>alertsAPI.list({level:levelF||undefined,resolved}).then(r=>r.data)
   })
 
-  const resolveM = useMutation({ mutationFn:id=>alertsAPI.resolve(id), onSuccess:()=>{ qc.invalidateQueries(['alerts-page']); toast.success('Alert resolved') } })
+  const resolveM = useMutation({
+    mutationFn:({id,note})=>alertsAPI.resolve(id,{resolution_note:note}),
+    onSuccess:()=>{
+      qc.invalidateQueries(['alerts-page'])
+      setResolveOpen(false)
+      setResolveNote('')
+      toast.success('Alert resolved')
+    },
+    onError:e=>toast.error(e.response?.data?.detail||'Resolve failed'),
+  })
+  const forwardM = useMutation({
+    mutationFn:id=>alertsAPI.forward(id),
+    onSuccess:()=>{ qc.invalidateQueries(['alerts-page']); toast.success('Forwarded to REB') },
+    onError:e=>toast.error(e.response?.data?.detail||'Forward failed'),
+  })
+  const reopenM = useMutation({
+    mutationFn:id=>alertsAPI.reopen(id),
+    onSuccess:()=>{ qc.invalidateQueries(['alerts-page']); toast.success('Alert reopened') },
+    onError:e=>toast.error(e.response?.data?.detail||'Reopen failed'),
+  })
 
-  const canResolve = ['admin','reb','district'].includes(user?.role)
+  const canResolve = ['reb','district'].includes(user?.role)
+  const pageTitle = user?.role === 'reb' ? 'Forwarded Alerts' : 'Resource Alerts'
   const critical = alerts.filter(a=>a.level==='critical').length
 
   return (
     <div>
-      <PageHeader title="Resource Alerts" sub={`${alerts.length} active · ${critical} critical`}/>
+      <PageHeader title={pageTitle} sub={`${alerts.length} shown · ${critical} critical`}/>
 
       {critical>0&&<Alert type="danger"><strong>{critical} critical alerts</strong> require immediate action.</Alert>}
 
@@ -508,7 +711,7 @@ export function AlertsPage() {
             style={{padding:'6px 14px',borderRadius:8,fontSize:12.5,fontWeight:600,cursor:'pointer',
               border:`1.5px solid ${levelF===l?'var(--blue)':'var(--border)'}`,
               background:levelF===l?'var(--blue-lt)':'#fff',color:levelF===l?'var(--blue)':'var(--text2)'}}>
-            {l||'All Levels'}
+            {l ? formatLabel(l) : 'All Levels'}
           </button>
         ))}
         <label style={{display:'flex',alignItems:'center',gap:8,marginLeft:'auto',fontSize:13,fontWeight:600,cursor:'pointer'}}>
@@ -519,16 +722,37 @@ export function AlertsPage() {
 
       <Card><CardBody>
         <Table loading={isLoading} columns={[
-          {key:'level',label:'Level',render:v=><Badge status={v==='critical'?'critical':v==='warning'?'moderate':'reviewed'} label={v?.toUpperCase()}/>},
-          {key:'alert_type',label:'Type',render:v=><span style={{fontSize:12,fontFamily:'monospace',background:'var(--bg2)',padding:'2px 7px',borderRadius:6}}>{v}</span>},
+          {key:'level',label:'Level',render:v=><Badge status={v==='critical'?'critical':v==='warning'?'moderate':'reviewed'} label={formatLabel(v)}/>},
+          {key:'alert_type',label:'Type',render:v=><Badge status="info" label={formatLabel(v)}/>},
+          {key:'school_name',label:'School',render:v=>v||'—'},
           {key:'message',label:'Message',render:v=><span style={{fontSize:12.5}}>{v}</span>},
           {key:'created_at',label:'Raised',render:v=>v?.slice(0,10)},
           {key:'is_resolved',label:'Status',render:v=><Badge status={v?'good':'pending'} label={v?'Resolved':'Active'}/>},
-          {key:'id',label:'Action',render:(v,row)=>canResolve&&!row.is_resolved&&(
-            <Btn size="sm" variant="success" onClick={()=>resolveM.mutate(v)} disabled={resolveM.isPending}>Resolve</Btn>
+          {key:'id',label:'Actions',render:(v,row)=>(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {canResolve&&!row.is_resolved&&<Btn size="sm" variant="success" onClick={()=>{ setResolveId(v); setResolveOpen(true) }}>Resolve</Btn>}
+              {user?.role==='district'&&!row.forwarded_to_reb&&!row.is_resolved&&
+                <Btn size="sm" variant="outline" onClick={()=>forwardM.mutate(v)} disabled={forwardM.isPending}>Forward</Btn>}
+              {canResolve&&row.is_resolved&&
+                <Btn size="sm" variant="outline" onClick={()=>reopenM.mutate(v)} disabled={reopenM.isPending}>Reopen</Btn>}
+            </div>
           )},
         ]} data={alerts} empty="No alerts found"/>
       </CardBody></Card>
+
+      <Modal open={resolveOpen} onClose={()=>setResolveOpen(false)} title="Resolve Alert">
+        <Field label="Resolution note (required)">
+          <Textarea value={resolveNote} onChange={e=>setResolveNote(e.target.value)}
+            placeholder="Describe the action taken to address this alert…" style={{minHeight:90}}/>
+        </Field>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:16}}>
+          <Btn variant="outline" onClick={()=>setResolveOpen(false)}>Cancel</Btn>
+          <Btn onClick={()=>{
+            if (resolveNote.trim().length<12) { toast.error('Note must be at least 12 characters'); return }
+            resolveM.mutate({id:resolveId,note:resolveNote.trim()})
+          }} disabled={resolveM.isPending}>{resolveM.isPending?'Saving...':'Confirm Resolve'}</Btn>
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -537,10 +761,13 @@ export function AlertsPage() {
 // ANALYTICS PAGE
 // ════════════════════════════════════════════════════════════════════
 export function AnalyticsPage() {
-  const { data: n={} }     = useQuery({ queryKey:['national'], queryFn:()=>analyticsAPI.national().then(r=>r.data) })
+  const { user } = useAuth()
+  const isReb = user?.role === 'reb'
+  const district = user?.role === 'district' ? user.district : undefined
+  const { data: n={} }     = useQuery({ queryKey:['national'], queryFn:()=>analyticsAPI.national().then(r=>r.data), enabled: isReb })
   const { data: dists=[] } = useQuery({ queryKey:['districts'], queryFn:()=>analyticsAPI.districts().then(r=>r.data) })
-  const { data: gaps={} }  = useQuery({ queryKey:['gaps'], queryFn:()=>analyticsAPI.gaps({}).then(r=>r.data) })
-  const { data: trends=[] }= useQuery({ queryKey:['trends-all'], queryFn:()=>analyticsAPI.trends({}).then(r=>r.data) })
+  const { data: gaps={} }  = useQuery({ queryKey:['gaps',district], queryFn:()=>analyticsAPI.gaps({ district }).then(r=>r.data) })
+  const { data: trends=[] }= useQuery({ queryKey:['trends-all',district], queryFn:()=>analyticsAPI.trends({ district }).then(r=>r.data) })
   const { data: gis={} }   = useQuery({ queryKey:['gis-sum'], queryFn:()=>analyticsAPI.gisSummary().then(r=>r.data) })
 
   return (

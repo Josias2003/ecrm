@@ -3,14 +3,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { schoolsAPI, analyticsAPI } from '../api/api'
 import { useAuth } from '../store/auth'
 import GISMap from '../components/GISMap'
+import SchoolDetailModal from '../components/SchoolDetailModal'
 import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, PageHeader, Modal, Field, Input } from '../components/UI'
 import toast from 'react-hot-toast'
 import { MapPin, Layers, Download } from 'lucide-react'
 
+function scopedDistrict(user) {
+  if (!user) return ''
+  if (user.role === 'district' || user.role === 'enumerator') return user.district || ''
+  return ''
+}
+
 export default function GISMapPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
-  const [filterDistrict, setFilterDistrict] = useState(user?.role === 'district' ? user.district : '')
+  const [filterDistrict, setFilterDistrict] = useState(scopedDistrict(user))
+  const [hoverSchoolId, setHoverSchoolId] = useState(null)
+  const [detailOpen, setDetailOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterGPS, setFilterGPS] = useState('')
@@ -121,102 +130,87 @@ export default function GISMapPage() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text2)' }}>Filter:</span>
         {[
-          { val: filterDistrict, set: setFilterDistrict, options: [['', 'All Districts'], ['Gasabo','Gasabo'], ['Kicukiro','Kicukiro'], ['Nyarugenge','Nyarugenge']], disabled: user?.role==='district' },
+          { val: filterDistrict, set: setFilterDistrict, options: [['', 'All Districts'], ['Gasabo','Gasabo'], ['Kicukiro','Kicukiro'], ['Nyarugenge','Nyarugenge']], disabled: ['district','enumerator'].includes(user?.role) },
           { val: filterStatus,   set: setFilterStatus,   options: [['','All Statuses'],['good','Good'],['moderate','Moderate'],['critical','Critical']] },
           { val: filterType,     set: setFilterType,     options: [['','All Types'],['Primary','Primary'],['Secondary','Secondary']] },
           { val: filterGPS,      set: setFilterGPS,      options: [['','All GPS'],['verified','Verified'],['unverified','Unverified']] },
         ].map((f, i) => (
           <select key={i} value={f.val} onChange={e => f.set(e.target.value)} disabled={f.disabled}
             style={{ padding: '7px 12px', border: '1.5px solid var(--border)', borderRadius: 9,
-              fontSize: 12.5, background: '#fff', cursor: f.disabled ? 'not-allowed' : 'pointer',
+              fontSize: 12.5, background: 'var(--card)', cursor: f.disabled ? 'not-allowed' : 'pointer',
               opacity: f.disabled ? .6 : 1 }}>
             {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         ))}
-        <button onClick={() => { setFilterDistrict(user?.role==='district'?user.district:''); setFilterStatus(''); setFilterType(''); setFilterGPS('') }}
+        <button onClick={() => { setFilterDistrict(scopedDistrict(user)); setFilterStatus(''); setFilterType(''); setFilterGPS('') }}
           style={{ padding: '7px 14px', borderRadius: 9, border: '1.5px solid var(--border)',
-            background: '#fff', cursor: 'pointer', fontSize: 12.5, color: 'var(--text2)' }}>
-          ↺ Reset
+            background: 'var(--card)', cursor: 'pointer', fontSize: 12.5, color: 'var(--text2)' }}>
+          Reset
         </button>
       </div>
 
-      {/* Main GIS Map */}
-      <Card style={{ marginBottom: 20 }}>
-        <CardBody style={{ padding: 20 }}>
-          <GISMap
-            schools={filtered}
-            filterDistrict={filterDistrict || undefined}
-            onSchoolClick={setSelectedSchool}
-            height={520}
-          />
-        </CardBody>
-      </Card>
-
-      {/* School detail panel */}
-      {selectedSchool && (
-        <Card style={{ marginBottom: 20, animation: 'slideIn .25s ease' }}>
-          <CardHeader
-            title={selectedSchool.name}
-            subtitle={`${selectedSchool.district} · ${selectedSchool.sector} · ${selectedSchool.school_type}`}
-            action={
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['admin','reb','district','enumerator'].includes(user?.role) && (
-                  <>
-                    <Btn size="sm" variant="outline" onClick={() => {
-                      setGpsSchool(selectedSchool)
-                      setNewLat(selectedSchool.latitude || '')
-                      setNewLng(selectedSchool.longitude || '')
-                      setGpsModalOpen(true)
-                    }}>📍 Edit GPS</Btn>
-                    {!selectedSchool.gps_verified && (
-                      <Btn size="sm" onClick={() => verifyMut.mutate(selectedSchool.id)}
-                        disabled={verifyMut.isPending}>
-                        {verifyMut.isPending ? '...' : '✓ Verify GPS'}
-                      </Btn>
-                    )}
-                  </>
-                )}
-                <button onClick={() => setSelectedSchool(null)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text2)' }}>×</button>
-              </div>
-            }
-          />
-          <CardBody>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 16 }}>
-              {[
-                ['Students', (selectedSchool.students_boys||0)+(selectedSchool.students_girls||0), '👩‍🎓'],
-                ['Teachers', (selectedSchool.teachers_male||0)+(selectedSchool.teachers_female||0), '👨‍🏫'],
-                ['Classrooms', selectedSchool.classrooms, '🏫'],
-                ['Textbooks', selectedSchool.textbooks, '📚'],
-              ].map(([l, v, ic]) => (
-                <div key={l} style={{ background: 'var(--bg2)', borderRadius: 9, padding: '11px 13px' }}>
-                  <div style={{ fontSize: 18, marginBottom: 3 }}>{ic}</div>
-                  <div style={{ fontFamily: 'Syne', fontSize: 20, fontWeight: 800 }}>{v}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--text2)' }}>{l}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              <Badge status={selectedSchool.status} size="lg" />
-              <Badge status={selectedSchool.school_type} size="lg" />
-              {selectedSchool.gps_verified
-                ? <Badge status="good" label="📍 GPS Verified" size="lg" />
-                : <Badge status="pending" label="📍 GPS Unverified" size="lg" />}
-            </div>
-            <div style={{ background: 'var(--bg2)', borderRadius: 9, padding: '11px 14px', fontSize: 12.5 }}>
-              <div style={{ fontWeight: 600, color: 'var(--text2)', marginBottom: 4 }}>GPS COORDINATES</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
-                {selectedSchool.latitude?.toFixed(6)}°S, {selectedSchool.longitude?.toFixed(6)}°E
-              </div>
-              {selectedSchool.distance_to_road_km && (
-                <div style={{ marginTop: 6, color: 'var(--text2)' }}>
-                  🛣️ {selectedSchool.distance_to_road_km} km to nearest road
-                </div>
-              )}
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 280px) 1fr', gap: 16, marginBottom: 20 }}>
+        <Card hover={false} style={{ maxHeight: 560, display: 'flex', flexDirection: 'column' }}>
+          <CardHeader title="Schools" subtitle={`${filtered.length} in view`} />
+          <CardBody style={{ padding: '8px 12px', overflowY: 'auto', flex: 1 }}>
+            {filtered.map(s => {
+              const active = selectedSchool?.id === s.id
+              const mapped = s.latitude && s.longitude
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => { setSelectedSchool(s); setDetailOpen(true) }}
+                  onMouseEnter={() => setHoverSchoolId(s.id)}
+                  onMouseLeave={() => setHoverSchoolId(null)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '10px 12px', marginBottom: 6, borderRadius: 10,
+                    border: active ? '1px solid var(--blue)' : '1px solid var(--border)',
+                    background: active ? 'var(--blue-lt)' : 'var(--bg2)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+                    {s.district} · {s.sector}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                    <Badge status={s.status} dot={false} />
+                    {!mapped && <Badge status="warning" label="No GPS" dot={false} />}
+                  </div>
+                </button>
+              )
+            })}
+            {!filtered.length && (
+              <div style={{ fontSize: 13, color: 'var(--text3)', padding: 12 }}>No schools match filters</div>
+            )}
           </CardBody>
         </Card>
-      )}
+
+        <Card style={{ marginBottom: 0 }}>
+          <CardBody style={{ padding: 20 }}>
+            <GISMap
+              schools={filtered}
+              filterDistrict={filterDistrict || undefined}
+              highlightSchoolId={hoverSchoolId || selectedSchool?.id}
+              onSchoolClick={(s) => { setSelectedSchool(s); setDetailOpen(true) }}
+              height={520}
+            />
+          </CardBody>
+        </Card>
+      </div>
+
+      <SchoolDetailModal
+        school={selectedSchool}
+        open={detailOpen && !!selectedSchool}
+        onClose={() => { setDetailOpen(false); setSelectedSchool(null) }}
+        onEdit={['reb', 'district', 'enumerator'].includes(user?.role) ? (s) => {
+          setGpsSchool(s)
+          setNewLat(s.latitude || '')
+          setNewLng(s.longitude || '')
+          setGpsModalOpen(true)
+        } : null}
+      />
 
       {/* Schools without GPS */}
       {unmapped.length > 0 && (
@@ -232,10 +226,10 @@ export default function GISMapPage() {
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--text2)' }}>{s.district} · {s.sector}</div>
                   </div>
-                  {['admin','reb','district','enumerator'].includes(user?.role) && (
+                  {['reb','district','enumerator'].includes(user?.role) && (
                     <Btn size="sm" variant="outline" onClick={() => {
                       setGpsSchool(s); setNewLat(''); setNewLng(''); setGpsModalOpen(true)
-                    }}>📍 Add GPS</Btn>
+                    }}>Add GPS</Btn>
                   )}
                 </div>
               ))}
@@ -260,7 +254,7 @@ export default function GISMapPage() {
           </Field>
         </div>
         <Btn variant="outline" onClick={locateMe} disabled={locating} style={{ width: '100%', justifyContent: 'center', marginBottom: 16 }}>
-          {locating ? '⏳ Getting location...' : '📍 Use My Current Location (GPS)'}
+          {locating ? 'Getting location...' : 'Use My Current Location (GPS)'}
         </Btn>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <Btn variant="outline" onClick={() => setGpsModalOpen(false)}>Cancel</Btn>
@@ -268,7 +262,7 @@ export default function GISMapPage() {
             if (!newLat || !newLng) { toast.error('Enter both coordinates'); return }
             updateGPSMut.mutate({ id: gpsSchool.id, lat: parseFloat(newLat), lng: parseFloat(newLng) })
           }} disabled={updateGPSMut.isPending}>
-            {updateGPSMut.isPending ? 'Saving...' : '💾 Save Coordinates'}
+            {updateGPSMut.isPending ? 'Saving...' : 'Save Coordinates'}
           </Btn>
         </div>
       </Modal>

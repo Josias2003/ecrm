@@ -13,7 +13,7 @@ class StatusEnum(str, enum.Enum):
     good="good"; moderate="moderate"; critical="critical"
 
 class FeedbackStatusEnum(str, enum.Enum):
-    pending="pending"; reviewed="reviewed"; resolved="resolved"
+    pending="pending"; reviewed="reviewed"; resolved="resolved"; closed="closed"
 
 class AlertLevelEnum(str, enum.Enum):
     info="info"; warning="warning"; critical="critical"
@@ -105,10 +105,32 @@ class Feedback(Base):
     reviewer_note    = Column(Text, nullable=True)
     reviewed_by      = Column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at      = Column(DateTime(timezone=True), nullable=True)
+    forwarded_to_reb = Column(Boolean, default=False, index=True)
+    forwarded_at     = Column(DateTime(timezone=True), nullable=True)
     created_at       = Column(DateTime(timezone=True), server_default=func.now())
     updated_at       = Column(DateTime(timezone=True), onupdate=func.now())
     school           = relationship("School", back_populates="feedback")
     submitted_by     = relationship("User", back_populates="feedback", foreign_keys=[user_id])
+    messages         = relationship("FeedbackMessage", back_populates="feedback", cascade="all, delete-orphan")
+
+class FeedbackMessage(Base):
+    __tablename__ = "feedback_messages"
+    id          = Column(Integer, primary_key=True, index=True)
+    feedback_id = Column(Integer, ForeignKey("feedback.id"), nullable=False, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content     = Column(Text, nullable=False)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    feedback    = relationship("Feedback", back_populates="messages")
+    author      = relationship("User")
+
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otps"
+    id         = Column(Integer, primary_key=True, index=True)
+    email      = Column(String(150), nullable=False, index=True)
+    otp_hash   = Column(String(255), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used       = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ResourceAlert(Base):
     __tablename__ = "resource_alerts"
@@ -119,6 +141,8 @@ class ResourceAlert(Base):
     message     = Column(Text, nullable=False)
     is_resolved = Column(Boolean, default=False, index=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+    forwarded_to_reb = Column(Boolean, default=False, index=True)
+    forwarded_at     = Column(DateTime(timezone=True), nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     school      = relationship("School", back_populates="alerts")
 
@@ -145,3 +169,35 @@ class AuditLog(Base):
     ip_address  = Column(String(50), nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     user        = relationship("User", back_populates="audit_logs")
+
+class ChatRoom(Base):
+    __tablename__ = "chat_rooms"
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String(150), nullable=False)
+    scope       = Column(String(20), nullable=False, index=True)  # national | district | school | role_group | direct
+    target_role = Column(String(30), nullable=True, index=True)   # role_group: school | enumerator | district
+    district    = Column(String(100), nullable=True, index=True)
+    school_id   = Column(Integer, ForeignKey("schools.id"), nullable=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    messages    = relationship("ChatMessage", back_populates="room", cascade="all, delete-orphan")
+    participants = relationship("ChatParticipant", back_populates="room", cascade="all, delete-orphan")
+
+class ChatParticipant(Base):
+    __tablename__ = "chat_participants"
+    id      = Column(Integer, primary_key=True, index=True)
+    room_id = Column(Integer, ForeignKey("chat_rooms.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    room    = relationship("ChatRoom", back_populates="participants")
+    user    = relationship("User")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id          = Column(Integer, primary_key=True, index=True)
+    room_id     = Column(Integer, ForeignKey("chat_rooms.id"), nullable=False, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reply_to_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=True, index=True)
+    content     = Column(Text, nullable=False)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    room        = relationship("ChatRoom", back_populates="messages")
+    author      = relationship("User")
+    reply_to    = relationship("ChatMessage", remote_side=[id], foreign_keys=[reply_to_id])

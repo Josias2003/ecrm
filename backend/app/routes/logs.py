@@ -5,19 +5,31 @@ from typing import List, Optional
 from app.core.database import get_db
 from fastapi import HTTPException
 from app.core.security import get_current_user, require_roles
-from app.models.models import AuditLog, EnrollmentHistory, School
+from app.models.models import AuditLog, EnrollmentHistory, School, User
 from app.schemas.schemas import AuditLogOut, EnrollmentHistoryOut
 
 logs_router = APIRouter(prefix="/api/logs", tags=["Logs"])
 
-@logs_router.get("/", response_model=List[AuditLogOut])
+@logs_router.get("", response_model=List[AuditLogOut])
 def get_logs(limit: int=Query(50, le=500),
              action_type: Optional[str]=Query(None),
              db: Session = Depends(get_db), cu=Depends(require_roles("admin"))):
     q = db.query(AuditLog)
     if action_type:
         q = q.filter(AuditLog.action_type == action_type)
-    return q.order_by(AuditLog.created_at.desc()).limit(limit).all()
+    rows = q.order_by(AuditLog.created_at.desc()).limit(limit).all()
+    out = []
+    for log in rows:
+        user_name = None
+        if log.user_id:
+            u = db.query(User).filter(User.id == log.user_id).first()
+            user_name = u.full_name if u else None
+        out.append(AuditLogOut(
+            id=log.id, user_id=log.user_id, action_type=log.action_type,
+            description=log.description, entity=log.entity, entity_id=log.entity_id,
+            ip_address=log.ip_address, user_name=user_name, created_at=log.created_at,
+        ))
+    return out
 
 enrollment_router = APIRouter(prefix="/api/enrollment", tags=["Enrollment"])
 

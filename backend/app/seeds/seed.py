@@ -11,6 +11,7 @@ from app.core.database import SessionLocal, engine
 from app.core.security import hash_password
 from app.models.models import (Base, User, School, Teacher, Feedback,
                                 ResourceAlert, EnrollmentHistory, AuditLog,
+                                ChatRoom, ChatMessage, ChatParticipant,
                                 StatusEnum, AlertLevelEnum)
 
 # ── Deterministic RNG ──────────────────────────────────────────────
@@ -139,7 +140,7 @@ def seed():
     db = SessionLocal()
 
     # Wipe all data
-    for model in [AuditLog, ResourceAlert, EnrollmentHistory, Feedback, Teacher, User, School]:
+    for model in [FeedbackMessage, PasswordResetOTP, ChatMessage, ChatParticipant, ChatRoom, AuditLog, ResourceAlert, EnrollmentHistory, Feedback, Teacher, User, School]:
         db.query(model).delete()
     db.commit()
 
@@ -300,6 +301,20 @@ def seed():
             ))
     db.commit()
     print("     OK: Enrollment history for 4 years seeded")
+
+    # ── SEED CHAT ROOMS ───────────────────────────────────────────
+    print("  Seeding chat rooms...")
+    db.add(ChatRoom(title="National Coordination", scope="national"))
+    db.add(ChatRoom(title="Head Masters", scope="role_group", target_role="school"))
+    db.add(ChatRoom(title="Field Enumerators", scope="role_group", target_role="enumerator"))
+    db.add(ChatRoom(title="District Officers", scope="role_group", target_role="district"))
+    for d in ["Gasabo", "Kicukiro", "Nyarugenge"]:
+        db.add(ChatRoom(title=f"{d} Field Team", scope="district", district=d))
+        db.add(ChatRoom(title=f"{d} Head Masters", scope="district_group", target_role="school", district=d))
+    for school in schools:
+        db.add(ChatRoom(title=f"{school.name} Staff", scope="school", school_id=school.id, district=school.district))
+    db.commit()
+    print("     OK: Chat rooms seeded")
 
     # ── SEED AUDIT LOGS ───────────────────────────────────────────
     db.add(AuditLog(action_type="SYSTEM", description="Database seeded successfully",

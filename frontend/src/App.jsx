@@ -5,11 +5,10 @@ import { CSS, PageLoad } from './components/UI'
 import {
   Search,
   Bell,
-  ChevronLeft,
-  ChevronRight,
+  ChevronUp,
+  Menu,
   Settings,
   LogOut,
-  User,
   LayoutDashboard,
   School,
   Map as MapIcon,
@@ -20,8 +19,12 @@ import {
   Users as UsersIcon,
   ClipboardList,
   Flag,
+  FileText,
+  ScrollText,
+  MessagesSquare,
+  User,
 } from 'lucide-react'
-import LoginPage from './pages/LoginPage'
+import LandingPage from './pages/LandingPage'
 import GISMapPage from './pages/GISMapPage'
 import SchoolsPage from './pages/SchoolsPage'
 import TeachersPage from './pages/TeachersPage'
@@ -30,21 +33,34 @@ import AlertsPage from './pages/AlertsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import UsersPage from './pages/UsersPage'
 import DashboardRouter from './pages/DashboardRouter'
+import ProfilePage from './pages/ProfilePage'
+import SettingsPage from './pages/SettingsPage'
+import ReportsPage from './pages/ReportsPage'
+import LogsPage from './pages/LogsPage'
+import ChatPage from './pages/ChatPage'
+import { useTheme } from './store/theme'
 
 const ROLE_LABELS = {
-  admin:'System Admin', reb:'REB Officer', district:'District Officer',
+  admin:'System Administrator', reb:'REB Officer', district:'District Officer',
   school:'School Head', enumerator:'Field Enumerator', community:'Community Member'
 }
 
-const NAV_CONFIG = {
+const ROUTE_ROLES = {
+  '/schools':   ['reb','district','enumerator','school'],
+  '/gis':       ['reb','district','enumerator','community','school'],
+  '/teachers':  ['reb','district','school'],
+  '/feedback':  ['reb','district','school','community'],
+  '/alerts':    ['reb','district','school','enumerator'],
+  '/analytics': ['reb','district'],
+  '/users':     ['admin'],
+  '/logs':      ['admin'],
+  '/reports':   ['reb','district','school','enumerator','community'],
+  '/chat':      ['reb','district','school','enumerator'],
+}
+
+const BASE_NAV = {
   admin:     [
-    { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
-    { path:'/schools',   label:'Schools',      icon:School },
-    { path:'/gis',       label:'GIS Map',      icon:MapIcon, highlight:true },
-    { path:'/teachers',  label:'Teachers',     icon:UserRound },
-    { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
-    { path:'/alerts',    label:'Alerts',       icon:BellRing },
-    { path:'/analytics', label:'Analytics',    icon:BarChart3 },
+    { path:'/dashboard', label:'System Health', icon:LayoutDashboard },
     { path:'/users',     label:'Users',        icon:UsersIcon },
   ],
   reb:       [
@@ -67,9 +83,9 @@ const NAV_CONFIG = {
   ],
   school:    [
     { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
-    { path:'/gis',       label:'School on Map',icon:MapIcon, highlight:true },
+    { path:'/schools',   label:'My School',    icon:School },
     { path:'/teachers',  label:'My Teachers',  icon:UserRound },
-    { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
+    { path:'/feedback',  label:'My Issues',    icon:MessageSquare },
     { path:'/alerts',    label:'Alerts',       icon:BellRing },
   ],
   enumerator:[
@@ -84,11 +100,40 @@ const NAV_CONFIG = {
   ],
 }
 
+const EXTRA_NAV = {
+  reports: { path:'/reports', label:'Reports', icon:FileText },
+  logs:    { path:'/logs', label:'Audit Logs', icon:ScrollText },
+  chat:    { path:'/chat', label:'Team Chat', icon:MessagesSquare },
+}
+
+function navForRole(role) {
+  const base = [...(BASE_NAV[role] || BASE_NAV.community)]
+  const extras = []
+  if (['reb','district','school','enumerator','community'].includes(role)) extras.push(EXTRA_NAV.reports)
+  if (role === 'admin') extras.push(EXTRA_NAV.logs)
+  if (['reb','district','school','enumerator'].includes(role)) extras.push(EXTRA_NAV.chat)
+  return [...base, ...extras]
+}
+
+function ProtectedRoute({ path, user, children }) {
+  const roles = ROUTE_ROLES[path]
+  if (roles && !roles.includes(user?.role)) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return children
+}
+
 function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
   const { logout } = useAuth()
   const navigate = useNavigate()
-  const nav = NAV_CONFIG[user.role] || NAV_CONFIG.admin
+  const [menuOpen, setMenuOpen] = useState(false)
+  const nav = navForRole(user.role)
   const initials = user.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
 
   return (
     <aside style={{ width:collapsed?64:240, minWidth:collapsed?64:240, background:'var(--navy)',
@@ -96,13 +141,18 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
       position:'fixed', left:0, top:0, zIndex:100, overflow:'hidden',
       transition:'width 200ms ease, min-width 200ms ease' }}>
 
-      <div style={{ position:'absolute', top:14, right:collapsed?10:14, width:collapsed?40:40, display:'flex', justifyContent:'center', zIndex:2 }}>
+      {/* Brand + toggle — top row */}
+      <div style={{
+        padding: collapsed ? '14px 10px' : '14px 14px',
+        borderBottom:'1px solid rgba(255,255,255,.08)',
+        display:'flex', alignItems:'center', gap:10,
+        transition:'padding 200ms ease',
+      }}>
         <button
           onClick={onToggle}
           aria-label="Toggle sidebar"
           style={{
-            width:collapsed?36:36,
-            height:36,
+            width:36, height:36, flexShrink:0,
             borderRadius:10,
             border:'1px solid rgba(226,232,240,.16)',
             background:'rgba(255,255,255,.04)',
@@ -113,47 +163,18 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
             justifyContent:'center',
           }}
         >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          <Menu size={18} />
         </button>
-      </div>
-
-      {/* Brand */}
-      <div style={{ padding:'72px 16px 18px', borderBottom:'1px solid rgba(255,255,255,.08)',
-        transition:'padding 200ms ease' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-          <div style={{ width:40, height:40, borderRadius:11, flexShrink:0,
+        <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0, flex:1 }}>
+          <div style={{ width:36, height:36, borderRadius:10, flexShrink:0,
             background:'linear-gradient(135deg,#2563EB,#06B6D4)',
             display:'flex', alignItems:'center', justifyContent:'center',
-            fontFamily:'Syne', fontSize:15, fontWeight:800, color:'#fff' }}>EC</div>
+            fontFamily:'Syne', fontSize:14, fontWeight:800, color:'#fff' }}>EC</div>
           {!collapsed && (
-            <div style={{transition:'opacity 200ms ease'}}>
-              <div style={{ fontFamily:'Syne', fontSize:15, fontWeight:800, color:'#fff',
-                letterSpacing:.3 }}>ECRM</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,.38)', marginTop:1 }}>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontFamily:'Syne', fontSize:15, fontWeight:800, color:'#fff', letterSpacing:.3 }}>ECRM</div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,.38)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                 Rwanda · Resource Mapping
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* User */}
-      <div style={{ padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,.08)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10,
-          background:'rgba(255,255,255,.07)', borderRadius:10, padding:'9px 11px' }}>
-          <div style={{ width:34, height:34, borderRadius:9, flexShrink:0,
-            background:'linear-gradient(135deg,#2563EB,#06B6D4)',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            fontSize:11, fontWeight:700, color:'#fff' }}>{initials}</div>
-          {!collapsed && (
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:12.5, fontWeight:600, color:'#fff',
-                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {user.full_name}
-              </div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,.4)', marginTop:1,
-                textTransform:'uppercase', letterSpacing:.5 }}>
-                {ROLE_LABELS[user.role]}
               </div>
             </div>
           )}
@@ -214,37 +235,110 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div style={{ padding:'12px 16px', borderTop:'1px solid rgba(255,255,255,.08)' }}>
-        <button onClick={() => { logout(); navigate('/login') }}
-          style={{ display:'flex', alignItems:'center', gap:9, padding:'8px 10px',
-            borderRadius:10, width:'100%', border:'none', background:'transparent',
-            fontSize:13, color:'rgba(148,163,184,.85)', cursor:'pointer',
-            fontFamily:'Inter', transition:'all .15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background='rgba(239,68,68,.15)'; e.currentTarget.style.color='#FCA5A5' }}
-          onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='rgba(255,255,255,.42)' }}>
-          {collapsed ? <LogOut size={16} /> : <>🚪 Sign Out</>}
+      {/* User menu — bottom */}
+      <div style={{ padding:'12px 10px', borderTop:'1px solid rgba(255,255,255,.08)', position:'relative' }}>
+        <button
+          onClick={() => setMenuOpen(v => !v)}
+          style={{
+            display:'flex', alignItems:'center', gap:10, width:'100%',
+            padding:'9px 10px', borderRadius:10, border:'none',
+            background:'rgba(255,255,255,.07)', cursor:'pointer',
+          }}
+        >
+          <div style={{ width:34, height:34, borderRadius:9, flexShrink:0,
+            background:'linear-gradient(135deg,#2563EB,#06B6D4)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:11, fontWeight:700, color:'#fff' }}>{initials}</div>
+          {!collapsed && (
+            <>
+              <div style={{ flex:1, minWidth:0, textAlign:'left' }}>
+                <div style={{ fontSize:12.5, fontWeight:600, color:'#fff',
+                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {user.full_name}
+                </div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,.4)', marginTop:1,
+                  textTransform:'uppercase', letterSpacing:.5 }}>
+                  {ROLE_LABELS[user.role]}
+                </div>
+              </div>
+              <ChevronUp size={16} style={{ color:'rgba(148,163,184,.85)', transform: menuOpen ? 'rotate(180deg)' : 'none', transition:'transform .15s' }} />
+            </>
+          )}
         </button>
+
+        {menuOpen && (
+          <div style={{
+            position:'absolute', bottom:'100%', left:10, right:10, marginBottom:8,
+            background:'#1E293B', border:'1px solid rgba(255,255,255,.1)',
+            borderRadius:12, overflow:'hidden', boxShadow:'0 12px 40px rgba(0,0,0,.35)', zIndex:200,
+          }}>
+            {[
+              { label:'Profile', icon:User, path:'/profile' },
+              { label:'Settings', icon:Settings, path:'/settings' },
+            ].map(item => (
+              <button
+                key={item.path}
+                onClick={() => { setMenuOpen(false); navigate(item.path) }}
+                style={{
+                  display:'flex', alignItems:'center', gap:10, width:'100%',
+                  padding:'11px 14px', border:'none', background:'transparent',
+                  color:'#F8FAFC', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left',
+                }}
+              >
+                <item.icon size={16} /> {item.label}
+              </button>
+            ))}
+            <div style={{ height:1, background:'rgba(255,255,255,.08)' }} />
+            <button
+              onClick={() => { setMenuOpen(false); handleLogout() }}
+              style={{
+                display:'flex', alignItems:'center', gap:10, width:'100%',
+                padding:'11px 14px', border:'none', background:'transparent',
+                color:'#FCA5A5', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left',
+              }}
+            >
+              <LogOut size={16} /> Sign Out
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )
 }
 
-function Topbar({ user, pendingAlerts, onLogout }) {
+function Topbar({ pendingAlerts }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const pageName = {
     '/dashboard':'Dashboard', '/schools':'Schools', '/gis':'GIS Map — Geospatial View',
     '/teachers':'Teacher Management', '/feedback':'Feedback & Reports',
     '/alerts':'Resource Alerts', '/analytics':'Analytics', '/users':'User Management',
+    '/profile':'Profile', '/settings':'Settings', '/reports':'Reports',
+    '/logs':'Audit Logs', '/chat':'Team Chat',
   }[location.pathname] || 'ECRM'
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    setSearch(params.get('q') || '')
+  }, [location.search])
+
+  const submitSearch = (event) => {
+    event.preventDefault()
+    const query = search.trim()
+    if (!query) return
+    const target = location.pathname === '/teachers' ? '/teachers'
+      : location.pathname === '/feedback' ? '/feedback'
+      : location.pathname === '/alerts' ? '/alerts'
+      : '/schools'
+    navigate(`${target}?q=${encodeURIComponent(query)}`)
+  }
 
   return (
     <header
       style={{
         height:62,
-        background:'#fff',
+        background:'var(--topbar)',
         borderBottom:'1px solid var(--border)',
         display:'grid',
         gridTemplateColumns:'minmax(220px,1fr) 400px auto',
@@ -258,19 +352,19 @@ function Topbar({ user, pendingAlerts, onLogout }) {
       }}
     >
       <div style={{minWidth:0}}>
-        <h1 style={{ fontFamily:'Inter', fontSize:18, fontWeight:700, color:'#0F172A', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+        <h1 style={{ fontFamily:'Inter', fontSize:18, fontWeight:700, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
           {pageName}
         </h1>
       </div>
 
-      <div style={{ display:'flex', alignItems:'center' }}>
+      <form onSubmit={submitSearch} style={{ display:'flex', alignItems:'center' }}>
         <div
           style={{
             width:'100%',
             display:'flex',
             alignItems:'center',
             gap:10,
-            background:'#fff',
+            background:'var(--card)',
             border:'1.5px solid var(--border)',
             borderRadius:12,
             padding:'10px 12px',
@@ -279,6 +373,8 @@ function Topbar({ user, pendingAlerts, onLogout }) {
         >
           <Search size={16} style={{ color:'#94A3B8', flexShrink:0 }} />
           <input
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
             placeholder="Search schools, districts..."
             style={{
               border:'none',
@@ -289,8 +385,18 @@ function Topbar({ user, pendingAlerts, onLogout }) {
               width:'100%',
             }}
           />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={()=>{ setSearch(''); navigate(location.pathname) }}
+              style={{ border:'none', background:'transparent', color:'#94A3B8', cursor:'pointer', fontWeight:800 }}
+            >
+              x
+            </button>
+          )}
         </div>
-      </div>
+      </form>
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12 }}>
         <button
@@ -309,7 +415,7 @@ function Topbar({ user, pendingAlerts, onLogout }) {
             position:'relative',
           }}
         >
-          <Bell size={18} style={{ color:'#0F172A' }} />
+          <Bell size={18} style={{ color:'var(--text)' }} />
           {pendingAlerts > 0 && (
             <span
               style={{
@@ -322,71 +428,13 @@ function Topbar({ user, pendingAlerts, onLogout }) {
                 fontWeight:800,
                 padding:'2px 6px',
                 borderRadius:999,
-                border:'2px solid #fff',
+                border:'2px solid var(--topbar)',
               }}
             >
               {pendingAlerts}
             </span>
           )}
         </button>
-
-        <div style={{ position:'relative' }}>
-          <button
-            onClick={()=>setOpen(v=>!v)}
-            style={{
-              width:42,
-              height:42,
-              borderRadius:14,
-              border:'1px solid var(--border)',
-              background:'var(--bg2)',
-              cursor:'pointer',
-              display:'flex',
-              alignItems:'center',
-              justifyContent:'center',
-              gap:10,
-            }}
-          >
-            <User size={18} style={{ color:'#0F172A' }} />
-            <span style={{ display:'none' }} />
-          </button>
-
-          {open && (
-            <div
-              style={{
-                position:'absolute',
-                right:0,
-                top:46,
-                width:220,
-                background:'#fff',
-                border:'1px solid var(--border)',
-                borderRadius:12,
-                boxShadow:'0 12px 40px rgba(0,0,0,.12)',
-                overflow:'hidden',
-                zIndex:2000,
-              }}
-            >
-              <button
-                onClick={() => { setOpen(false); navigate('/dashboard') }}
-                style={{ width:'100%', textAlign:'left', padding:'12px 14px', background:'transparent', border:'none', cursor:'pointer', fontWeight:600, color:'#0F172A' }}
-              >
-                Profile
-              </button>
-              <button
-                onClick={() => { setOpen(false); navigate('/analytics') }}
-                style={{ width:'100%', textAlign:'left', padding:'12px 14px', background:'transparent', border:'none', cursor:'pointer', fontWeight:600, color:'#0F172A' }}
-              >
-                Settings
-              </button>
-              <div style={{ height:1, background:'#EEF2F7' }} />
-              <button
-                onClick={() => { setOpen(false); onLogout?.() }}
-                style={{ width:'100%', textAlign:'left', padding:'12px 14px', background:'transparent', border:'none', cursor:'pointer', fontWeight:700, color:'var(--red)', display:'flex', alignItems:'center', gap:10 }}
-              >
-                <LogOut size={16} /> Sign Out
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </header>
   )
@@ -395,16 +443,18 @@ function Topbar({ user, pendingAlerts, onLogout }) {
 function AppShell({ user }) {
   const [pendingAlerts, setPendingAlerts] = useState(0)
   const [collapsed, setCollapsed] = useState(false)
-  const { logout } = useAuth()
-  const navigate = useNavigate()
+  const { init: initTheme } = useTheme()
+
+  useEffect(() => { initTheme() }, [initTheme])
 
   useEffect(() => {
+    if (!['reb','district','school'].includes(user?.role)) return
     import('./api/api').then(({ alertsAPI }) => {
       alertsAPI.list({ resolved: false }).then(r => {
         setPendingAlerts(r.data?.length || 0)
       }).catch(() => {})
     })
-  }, [])
+  }, [user?.role])
 
   useEffect(() => {
     const apply = () => setCollapsed(window.innerWidth < 1024)
@@ -413,11 +463,6 @@ function AppShell({ user }) {
     return () => window.removeEventListener('resize', apply)
   }, [])
 
-  const onLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
   const sidebarWidth = collapsed ? 64 : 240
 
   return (
@@ -425,18 +470,23 @@ function AppShell({ user }) {
       <Sidebar user={user} pendingAlerts={pendingAlerts} collapsed={collapsed} onToggle={()=>setCollapsed(v=>!v)} />
       <div style={{ marginLeft:sidebarWidth, flex:1, display:'flex',
         flexDirection:'column', minHeight:'100vh', overflow:'hidden' }}>
-        <Topbar user={user} pendingAlerts={pendingAlerts} onLogout={onLogout} />
+        <Topbar pendingAlerts={pendingAlerts} />
         <main style={{ flex:1, padding:'24px 24px', overflowY:'auto' }}>
           <div style={{ maxWidth:1400, margin:'0 auto' }}>
             <Routes>
               <Route path="/dashboard" element={<DashboardRouter />} />
-              <Route path="/gis"       element={<GISMapPage />} />
-              <Route path="/schools"   element={<SchoolsPage />} />
-              <Route path="/teachers"  element={<TeachersPage />} />
-              <Route path="/feedback"  element={<FeedbackPage />} />
-              <Route path="/alerts"    element={<AlertsPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/users"     element={<UsersPage />} />
+              <Route path="/gis"       element={<ProtectedRoute path="/gis" user={user}><GISMapPage /></ProtectedRoute>} />
+              <Route path="/schools"   element={<ProtectedRoute path="/schools" user={user}><SchoolsPage /></ProtectedRoute>} />
+              <Route path="/teachers"  element={<ProtectedRoute path="/teachers" user={user}><TeachersPage /></ProtectedRoute>} />
+              <Route path="/feedback"  element={<ProtectedRoute path="/feedback" user={user}><FeedbackPage /></ProtectedRoute>} />
+              <Route path="/alerts"    element={<ProtectedRoute path="/alerts" user={user}><AlertsPage /></ProtectedRoute>} />
+              <Route path="/analytics" element={<ProtectedRoute path="/analytics" user={user}><AnalyticsPage /></ProtectedRoute>} />
+              <Route path="/users"     element={<ProtectedRoute path="/users" user={user}><UsersPage /></ProtectedRoute>} />
+              <Route path="/profile"   element={<ProfilePage />} />
+              <Route path="/settings"  element={<SettingsPage />} />
+              <Route path="/reports"   element={<ProtectedRoute path="/reports" user={user}><ReportsPage /></ProtectedRoute>} />
+              <Route path="/logs"      element={<ProtectedRoute path="/logs" user={user}><LogsPage /></ProtectedRoute>} />
+              <Route path="/chat"      element={<ProtectedRoute path="/chat" user={user}><ChatPage /></ProtectedRoute>} />
               <Route path="*"          element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>
@@ -461,8 +511,9 @@ export default function App() {
     <BrowserRouter>
       <style>{CSS}</style>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <LoginPage />} />
-        <Route path="/*"     element={user ? <AppShell user={user} /> : <Navigate to="/login" />} />
+        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/*" element={user ? <AppShell user={user} /> : <Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

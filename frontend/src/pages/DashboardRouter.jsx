@@ -1,163 +1,91 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/auth'
-import { analyticsAPI, alertsAPI, feedbackAPI, schoolsAPI } from '../api/api'
+import { analyticsAPI, alertsAPI, feedbackAPI, schoolsAPI, reportsAPI, systemAPI, logsAPI, usersAPI } from '../api/api'
+import toast from 'react-hot-toast'
 import { StatCard, Card, CardHeader, CardBody, DonutChart, ProgressBar,
          Badge, Alert, Table, Btn, Tabs, Empty, PageHeader } from '../components/UI'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
          CartesianGrid, LineChart, Line, Legend } from 'recharts'
 import { useState } from 'react'
-import { School, Users, BookOpen, AlertTriangle, TrendingUp, MapPin, Download } from 'lucide-react'
+import {
+  School, Users, BookOpen, AlertTriangle, TrendingUp, MapPin, Download,
+  Armchair, Building2, CircleCheck, Droplets, Zap, Globe, Lock, UtensilsCrossed,
+  Library, FlaskConical, Monitor, MessageSquare,
+} from 'lucide-react'
+import { formatLabel } from '../utils/format'
 
-// ── ADMIN DASHBOARD ────────────────────────────────────────────────
+function monthStart() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+async function downloadReport(type) {
+  try {
+    const r = await reportsAPI.export({ type, from_date: monthStart(), to_date: todayStr(), format: 'pdf' })
+    const url = URL.createObjectURL(r.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ECRM_${type}_${monthStart()}_${todayStr()}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('PDF report downloaded')
+  } catch {
+    toast.error('PDF export failed')
+  }
+}
+
+// ── SYSTEM ADMIN DASHBOARD (technical only) ───────────────────────
 function AdminDashboard() {
-  const [tab, setTab] = useState('overview')
-  const [critDismissed, setCritDismissed] = useState(false)
-  const { data: n = {} }   = useQuery({ queryKey:['national'], queryFn:()=>analyticsAPI.national().then(r=>r.data) })
-  const { data: dists=[] } = useQuery({ queryKey:['districts'], queryFn:()=>analyticsAPI.districts().then(r=>r.data) })
-  const { data: gaps={} }  = useQuery({ queryKey:['gaps'], queryFn:()=>analyticsAPI.gaps({}).then(r=>r.data) })
-  const { data: alerts=[] }= useQuery({ queryKey:['alerts'], queryFn:()=>alertsAPI.list({resolved:false}).then(r=>r.data) })
-  const { data: logs=[] }  = useQuery({ queryKey:['logs'], queryFn:()=>import('../api/api').then(m=>m.logsAPI.list({limit:15}).then(r=>r.data)) })
-  const { data: risk=[] }  = useQuery({ queryKey:['risk'], queryFn:()=>analyticsAPI.riskScores({ limit: 8 }).then(r=>r.data) })
-
-  const critAlerts = alerts.filter(a=>a.level==='critical').length
+  const navigate = useNavigate()
+  const { data: health = {} } = useQuery({ queryKey:['system-health'], queryFn:()=>systemAPI.healthStats().then(r=>r.data) })
+  const { data: logs=[] } = useQuery({ queryKey:['admin-logs'], queryFn:()=>logsAPI.list({limit:12}).then(r=>r.data) })
+  const { data: users=[] } = useQuery({ queryKey:['admin-users'], queryFn:()=>usersAPI.list(0,200).then(r=>r.data) })
 
   return (
     <div>
-      <PageHeader title="System Administration"
-        sub={`Full control · ${n.total_schools||0} schools · ${n.total_students||0} students`}
-        action={<Btn><Download size={16}/> Export All Data</Btn>}/>
+      <PageHeader title="System Health"
+        sub="Technical administration — users, security, and platform status"
+        action={<Btn variant="outline" onClick={()=>navigate('/users')}>Manage Users</Btn>}/>
 
-      {critAlerts>0 && !critDismissed && (
-        <Alert type="danger" toast onClose={()=>setCritDismissed(true)}>
-          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-            <strong>{critAlerts} critical alerts</strong> require immediate action.
-            <button
-              onClick={()=>window.location.href='/alerts'}
-              style={{border:'none',cursor:'pointer',background:'transparent',color:'#2563EB',fontWeight:800,padding:0}}
-            >
-              View Alerts
-            </button>
-          </div>
-        </Alert>
-      )}
+      <Alert type="info">System admin manages accounts and platform health only. Education operations are handled by REB and district officers.</Alert>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
-        <StatCard label="Total Schools"  value={n.total_schools||0}  sub="Across 3 districts" icon={School} accent="blue"/>
-        <StatCard label="Students"       value={n.total_students?(n.total_students/1000).toFixed(1)+'K':0} sub="Enrolled" icon={Users} accent="green"/>
-        <StatCard label="Active Alerts"  value={alerts.length||0}    sub="Resource gaps" icon={AlertTriangle} accent="red" trend="down"/>
-        <StatCard label="GPS Verified"   value={n.schools_gps_verified||0} sub={`of ${n.total_schools||0} schools`} icon={MapPin} accent="cyan"/>
+        <StatCard label="API Status" value={health.api_status==='ok'?'Online':'Issue'} sub="ECRM backend" accent="green"/>
+        <StatCard label="Active Users" value={health.active_users||0} sub={`${health.inactive_users||0} inactive`} accent="blue"/>
+        <StatCard label="Audit Events" value={health.audit_events_24h||0} sub="Last 24 hours" accent="cyan"/>
+        <StatCard label="Failed Logins" value={health.failed_logins_24h||0} sub="Last 24 hours" accent={health.failed_logins_24h>0?'red':'green'}/>
       </div>
 
-      <Tabs tabs={[{id:'overview',label:'Overview'},{id:'districts',label:'Districts'},{id:'resources',label:'Resources'},{id:'logs',label:'Activity'}]} active={tab} onChange={setTab}/>
-
-      {tab==='overview'&&(
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-          <Card><CardHeader title="Schools by Status"/><CardBody>
-            <DonutChart good={n.good_schools} moderate={n.moderate_schools} critical={n.critical_schools}/>
-          </CardBody></Card>
-          <Card><CardHeader title="Facilities Coverage"/><CardBody>
-            <ProgressBar label="Running Water"  have={n.schools_with_water}      need={n.total_schools} color="#3B82F6"/>
-            <ProgressBar label="Electricity"    have={n.schools_with_electricity} need={n.total_schools} color="#F59E0B"/>
-            <ProgressBar label="Library"        have={n.schools_with_library}     need={n.total_schools} color="#8B5CF6"/>
-            <ProgressBar label="ICT Lab"        have={n.schools_with_ict}         need={n.total_schools} color="#06B6D4"/>
-            <ProgressBar label="GPS Verified"   have={n.schools_gps_verified}     need={n.total_schools} color="#22C55E"/>
-          </CardBody></Card>
-          <Card hover={false} style={{gridColumn:'1/-1', border:'none', boxShadow:'none', background:'transparent'}}><CardHeader title="Intervention Priority — Top Risk Schools" subtitle="Heuristic risk score (0–100) to guide rapid action"/>
-            <CardBody>
-              <Table columns={[
-                { key:'name', label:'School', render:(v,r)=><strong>{v}</strong> },
-                { key:'district', label:'District' },
-                { key:'status', label:'Status', render:v=><Badge status={v} dot={false}/> },
-                { key:'pupil_teacher_ratio', label:'P:T', render:v=>(
-                  <div style={{fontFamily:'monospace',textAlign:'center',width:'100%'}}>{v ? `1:${v}` : '—'}</div>
-                )},
-                { key:'risk_score', label:'Risk', render:v=>{
-                  const score = Number(v || 0)
-                  const color = score >= 35 ? '#EF4444' : score >= 25 ? '#F59E0B' : '#22C55E'
-                  return (
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <span style={{width:8,height:8,borderRadius:'50%',background:color}}/>
-                      <span style={{fontWeight:800,color}}>{score}/100</span>
-                    </div>
-                  )
-                }},
-              ]} data={risk} empty="No risk data"/>
-            </CardBody>
-          </Card>
-          <Card style={{gridColumn:'1/-1'}}><CardHeader title="District Comparison — Students & Teachers"/>
-            <CardBody>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={dists} barGap={6}>
-                  <CartesianGrid stroke="#F1F5F9" vertical={false}/>
-                  <XAxis dataKey="district" tick={{fontSize:12}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fontSize:11}} axisLine={false} tickLine={false}/>
-                  <Tooltip contentStyle={{borderRadius:10,border:'1px solid var(--border)',fontSize:12}}/>
-                  <Legend iconType="square" wrapperStyle={{ paddingTop: 10 }} />
-                  <Bar dataKey="total_students" fill="#3B82F6" name="Students" radius={[6,6,0,0]}/>
-                  <Bar dataKey="total_teachers" fill="#22C55E" name="Teachers" radius={[6,6,0,0]}/>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardBody>
-          </Card>
-        </div>
-      )}
-      {tab==='districts'&&(
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
-          {dists.map(d=>(
-            <Card key={d.district}><CardHeader title={d.district} subtitle={`${d.total_schools} schools`}/><CardBody>
-              {[['Students',d.total_students?.toLocaleString()],['Teachers',d.total_teachers],
-                ['P:T Ratio',`1:${d.avg_pupil_teacher_ratio}`],
-                ['With Water',`${d.schools_with_water}/${d.total_schools}`],
-                ['With Power',`${d.schools_with_electricity}/${d.total_schools}`],
-                ['Critical',d.critical_schools]].map(([l,v])=>(
-                <div key={l} style={{display:'flex',justifyContent:'space-between',
-                  padding:'8px 0',borderBottom:'1px solid var(--bg)',fontSize:13}}>
-                  <span style={{color:'var(--text2)'}}>{l}</span>
-                  <strong style={{color:l==='Critical'&&v>0?'var(--red)':'var(--text)'}}>{v}</strong>
-                </div>
-              ))}
-              <div style={{marginTop:12}}>
-                <Badge status={d.critical_schools>1?'critical':d.critical_schools>0?'moderate':'good'}/>
-              </div>
-            </CardBody></Card>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
+        <Card><CardHeader title="Users by Role"/><CardBody>
+          {Object.entries(health.users_by_role||{}).map(([role,count])=>(
+            <div key={role} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid var(--border)',fontSize:13}}>
+              <span style={{textTransform:'capitalize',color:'var(--text2)'}}>{role}</span>
+              <strong>{count}</strong>
+            </div>
           ))}
-        </div>
-      )}
-      {tab==='resources'&&(
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-          <Card><CardHeader title="Resource Gaps (National)"/><CardBody>
-            <ProgressBar label="Textbooks coverage" have={gaps.textbooks?.have} need={gaps.textbooks?.need}/>
-            <ProgressBar label="Desks coverage"     have={gaps.desks?.have}     need={gaps.desks?.need}/>
-            <ProgressBar label="Toilet capacity"    have={gaps.toilets?.have}   need={gaps.toilets?.need}/>
-            <ProgressBar label="Classroom capacity" have={gaps.classrooms?.have}need={gaps.classrooms?.need}/>
-          </CardBody></Card>
-          <Card><CardHeader title="Critical Alerts" subtitle="Unresolved"/><CardBody>
-            {alerts.filter(a=>a.level==='critical').slice(0,8).map(a=>(
-              <div key={a.id} style={{padding:'9px 0',borderBottom:'1px solid var(--bg)',display:'flex',gap:10}}>
-                <span style={{fontSize:16,flexShrink:0}}>🚨</span>
-                <div>
-                  <div style={{fontSize:12.5,fontWeight:600}}>{a.message}</div>
-                  <div style={{fontSize:11,color:'var(--text2)',marginTop:1}}>{a.alert_type}</div>
-                </div>
-              </div>
-            ))}
-            {alerts.filter(a=>a.level==='critical').length===0&&<Empty icon="✅" title="No critical alerts" desc="All critical issues resolved"/>}
-          </CardBody></Card>
-        </div>
-      )}
-      {tab==='logs'&&(
-        <Card><CardHeader title="System Activity Log"/><CardBody>
-          {(logs||[]).map(l=>(
+          <div style={{marginTop:14,fontSize:12,color:'var(--text3)'}}>
+            {users.length} accounts loaded · {health.total_schools||0} schools in database (read-only)
+          </div>
+        </CardBody></Card>
+
+        <Card><CardHeader title="Recent Audit Activity" action={<Btn size="sm" variant="outline" onClick={()=>navigate('/logs')}>View all</Btn>}/><CardBody>
+          {(logs||[]).slice(0,8).map(l=>(
             <div key={l.id} style={{display:'flex',gap:11,padding:'9px 0',borderBottom:'1px solid var(--bg)'}}>
-              <Badge status={l.action_type==='LOGIN'?'reviewed':l.action_type==='ALERT'?'critical':l.action_type==='FEEDBACK'?'pending':'good'}
-                label={l.action_type}/>
+              <Badge status={l.action_type==='LOGIN_FAILED'?'critical':'reviewed'} label={l.action_type} dot={false}/>
               <div style={{flex:1}}>
                 <div style={{fontSize:12.5}}>{l.description}</div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>{l.user_name||'System'} · {l.created_at?.replace('T',' ').slice(0,16)}</div>
               </div>
             </div>
           ))}
         </CardBody></Card>
-      )}
+      </div>
     </div>
   )
 }
@@ -176,7 +104,7 @@ function REBDashboard() {
     <div>
       <PageHeader title="National Education Overview"
         sub={`Rwanda Education Board · ${n.total_schools||0} public schools`}
-        action={<Btn><Download size={16}/> Export National Report</Btn>}/>
+        action={<Btn onClick={() => downloadReport('district_overview')}><Download size={16}/> Export National Report</Btn>}/>
       {n.critical_schools>0&&<Alert type="warning"><strong>{n.critical_schools} schools</strong> in critical condition — resource intervention required.</Alert>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
         <StatCard label="Schools"    value={n.total_schools||0} sub="Public mapped" icon={School} accent="blue"/>
@@ -267,7 +195,7 @@ function DistrictDashboard() {
     <div>
       <PageHeader title={`${user?.district} District`}
         sub={`${schools.length} schools · ${stu.toLocaleString()} students`}
-        action={<Btn><Download size={16}/> Export District Report</Btn>}/>
+        action={<Btn onClick={() => downloadReport('schools_summary')}><Download size={16}/> Export District Report</Btn>}/>
       {critical>0&&<Alert type="danger"><strong>{critical} school{critical>1?'s':''}</strong> in critical condition — immediate action required.</Alert>}
       {alerts.filter(a=>a.level==='critical').length>0&&<Alert type="warning"><strong>{alerts.filter(a=>a.level==='critical').length} critical alerts</strong> active in your district.</Alert>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
@@ -420,19 +348,42 @@ function SchoolDashboard() {
       {tab==='overview'&&(<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
         <Card><CardHeader title="Inventory"/><CardBody>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-            {[['Textbooks',s.textbooks,'📚'],['Desks',s.desks,'🪑'],['Toilets (Boys)',s.toilets_boys,'🚻'],['Toilets (Girls)',s.toilets_girls,'🚻'],['Classrooms',s.classrooms,'🏫'],['Usable Rooms',s.classrooms_good,'✅']].map(([l,v,ic])=>(
-              <div key={l} style={{background:'var(--bg2)',borderRadius:9,padding:13}}>
-                <div style={{fontSize:18,marginBottom:3}}>{ic}</div>
-                <div style={{fontFamily:'Syne',fontSize:22,fontWeight:800}}>{v||0}</div>
-                <div style={{fontSize:10.5,color:'var(--text2)'}}>{l}</div>
+            {[
+              {l:'Textbooks',v:s.textbooks,Icon:BookOpen,c:'#2563EB'},
+              {l:'Desks',v:s.desks,Icon:Armchair,c:'#8B5CF6'},
+              {l:'Toilets (Boys)',v:s.toilets_boys,Icon:Users,c:'#06B6D4'},
+              {l:'Toilets (Girls)',v:s.toilets_girls,Icon:Users,c:'#EC4899'},
+              {l:'Classrooms',v:s.classrooms,Icon:Building2,c:'#F59E0B'},
+              {l:'Usable Rooms',v:s.classrooms_good,Icon:CircleCheck,c:'#10B981'},
+            ].map(({l,v,Icon,c})=>(
+              <div key={l} style={{background:'var(--bg2)',borderRadius:10,padding:14,border:'1px solid var(--border)'}}>
+                <div style={{width:34,height:34,borderRadius:9,background:`${c}18`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8}}>
+                  <Icon size={17} color={c}/>
+                </div>
+                <div style={{fontFamily:'Syne',fontSize:22,fontWeight:800,color:'var(--text)'}}>{v||0}</div>
+                <div style={{fontSize:11,color:'var(--text2)',marginTop:2}}>{l}</div>
               </div>
             ))}
           </div>
         </CardBody></Card>
         <Card><CardHeader title="Facilities"/><CardBody>
-          {[['Library',s.has_library,'📖'],['ICT Lab',s.has_ict_lab,'💻'],['Science Lab',s.has_science_lab,'🔬'],['Running Water',s.has_water,'💧'],['Electricity',s.has_electricity,'⚡'],['Internet',s.has_internet,'🌐'],['Fence',s.has_fence,'🔒'],['Canteen',s.has_canteen,'🍽️']].map(([l,v,ic])=>(
-            <div key={l} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 0',borderBottom:'1px solid var(--bg)'}}>
-              <div style={{display:'flex',gap:9,alignItems:'center'}}><span style={{fontSize:16}}>{ic}</span><span style={{fontWeight:600,fontSize:13}}>{l}</span></div>
+          {[
+            {l:'Library',v:s.has_library,Icon:Library},
+            {l:'ICT Lab',v:s.has_ict_lab,Icon:Monitor},
+            {l:'Science Lab',v:s.has_science_lab,Icon:FlaskConical},
+            {l:'Running Water',v:s.has_water,Icon:Droplets},
+            {l:'Electricity',v:s.has_electricity,Icon:Zap},
+            {l:'Internet',v:s.has_internet,Icon:Globe},
+            {l:'Fence',v:s.has_fence,Icon:Lock},
+            {l:'Canteen',v:s.has_canteen,Icon:UtensilsCrossed},
+          ].map(({l,v,Icon})=>(
+            <div key={l} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+              <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                <div style={{width:30,height:30,borderRadius:8,background:v?'#ECFDF5':'#FEF2F2',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <Icon size={15} color={v?'#10B981':'#EF4444'}/>
+                </div>
+                <span style={{fontWeight:600,fontSize:13}}>{l}</span>
+              </div>
               <Badge status={v?'good':'critical'} label={v?'Available':'Missing'}/>
             </div>
           ))}
@@ -469,14 +420,16 @@ function SchoolDashboard() {
           </LineChart>
         </ResponsiveContainer>
       </CardBody></Card>)}
-      {tab==='feedback'&&(<Card><CardHeader title="Community Feedback"/><CardBody>
-        {feedback.length===0?<Empty icon="✉️" title="No feedback yet" desc="No community reports for this school"/>:
+      {tab==='feedback'&&(<Card><CardHeader title="Submitted Issues"/><CardBody>
+        {feedback.length===0?<Empty title="No issues yet" desc="Reports you submit will appear here with status updates"/>:
           feedback.map(f=>(
-            <div key={f.id} style={{display:'flex',gap:12,padding:'12px 0',borderBottom:'1px solid var(--bg)'}}>
-              <span style={{width:9,height:9,borderRadius:'50%',background:'var(--blue)',flexShrink:0,marginTop:5}}/>
+            <div key={f.id} style={{display:'flex',gap:12,padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
+              <div style={{width:32,height:32,borderRadius:8,background:'var(--blue-lt)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <MessageSquare size={15} color="var(--blue)"/>
+              </div>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:600}}>{f.description}</div>
-                <div style={{fontSize:11,color:'var(--text2)'}}>{f.issue_type} · {f.reporter_name||'Anonymous'} · {f.created_at?.slice(0,10)}</div>
+                <div style={{fontSize:13,fontWeight:600}}>{f.description?.slice(0,120)}{f.description?.length>120?'…':''}</div>
+                <div style={{fontSize:11,color:'var(--text2)',marginTop:3}}>{formatLabel(f.issue_type)} · {f.created_at?.slice(0,10)}</div>
               </div>
               <Badge status={f.status}/>
             </div>
@@ -500,13 +453,12 @@ function EnumeratorDashboard() {
         <StatCard label="Action"        value="Collect GPS"     sub="Use Schools page" accent="cyan"/>
       </div>
       <Card><CardHeader title="Quick Guide"/><CardBody>
-        {[['1. Register a school','Go to Schools → Register School. Fill all fields and capture GPS coordinates.','🏫'],
-          ['2. Verify GPS on site','Open the school record → click Verify GPS when you are physically at the school.','📍'],
-          ['3. Submit teacher data','Go to Teachers → Add Teacher. Link each teacher to their school.','👨‍🏫'],
-          ['4. Report issues','Use the Feedback page to document any issues you observe.','💬'],
-        ].map(([title,desc,ic])=>(
+        {[['1. Register a school','Go to Schools → Register School. Fill all fields and capture GPS coordinates.','Step 1'],
+          ['2. Verify GPS on site','Open the school on the GIS Map and verify coordinates when physically at the school.','Step 2'],
+          ['3. Update locations','Use the Field Map to correct or add GPS for schools missing coordinates.','Step 3'],
+        ].map(([title,desc,step])=>(
           <div key={title} style={{display:'flex',gap:14,padding:'14px 0',borderBottom:'1px solid var(--bg)'}}>
-            <span style={{fontSize:28,flexShrink:0}}>{ic}</span>
+            <span style={{fontSize:12,fontWeight:700,color:'var(--blue)',flexShrink:0,width:48}}>{step}</span>
             <div><div style={{fontWeight:700,fontSize:14,marginBottom:3}}>{title}</div>
             <div style={{fontSize:13,color:'var(--text2)'}}>{desc}</div></div>
           </div>

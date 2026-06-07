@@ -5,10 +5,12 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.core.config import settings
+from app.core.database import ensure_schema
 from app.routes import (
     auth_router, users_router, schools_router,
     teachers_router, feedback_router, alerts_router,
-    analytics_router, logs_router, enrollment_router
+    analytics_router, logs_router, enrollment_router,
+    reports_router, chat_router, system_router,
 )
 
 limiter = Limiter(key_func=get_remote_address)
@@ -19,9 +21,11 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
+    redirect_slashes=False,
 )
 
 app.state.limiter = limiter
+ensure_schema()
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,9 +42,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": "Invalid request data", "errors": exc.errors()},
     )
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)},
+    )
+
 for router in [auth_router, users_router, schools_router, teachers_router,
                feedback_router, alerts_router, analytics_router,
-               logs_router, enrollment_router]:
+               logs_router, enrollment_router, reports_router, chat_router, system_router]:
     app.include_router(router)
 
 @app.get("/api/health")
