@@ -10,6 +10,7 @@ from datetime import datetime
 from app.core.database import SessionLocal, engine
 from app.core.security import hash_password
 from app.models.models import (Base, User, School, Teacher, Feedback,
+                                FeedbackMessage, PasswordResetOTP,
                                 ResourceAlert, EnrollmentHistory, AuditLog,
                                 ChatRoom, ChatMessage, ChatParticipant,
                                 StatusEnum, AlertLevelEnum)
