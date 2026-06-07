@@ -1,6 +1,5 @@
 # ECRM — System Testing & Validation Document
 ## Education Community Resource Mapping · Rwanda
-### Version 1.0 | Academic Final Year Project
 
 ---
 

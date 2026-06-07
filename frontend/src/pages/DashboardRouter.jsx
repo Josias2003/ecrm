@@ -6,11 +6,12 @@ import { StatCard, Card, CardHeader, CardBody, DonutChart, ProgressBar,
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
          CartesianGrid, LineChart, Line, Legend } from 'recharts'
 import { useState } from 'react'
-import { School, Users, BookOpen, AlertTriangle, TrendingUp, MapPin } from 'lucide-react'
+import { School, Users, BookOpen, AlertTriangle, TrendingUp, MapPin, Download } from 'lucide-react'
 
 // ── ADMIN DASHBOARD ────────────────────────────────────────────────
 function AdminDashboard() {
   const [tab, setTab] = useState('overview')
+  const [critDismissed, setCritDismissed] = useState(false)
   const { data: n = {} }   = useQuery({ queryKey:['national'], queryFn:()=>analyticsAPI.national().then(r=>r.data) })
   const { data: dists=[] } = useQuery({ queryKey:['districts'], queryFn:()=>analyticsAPI.districts().then(r=>r.data) })
   const { data: gaps={} }  = useQuery({ queryKey:['gaps'], queryFn:()=>analyticsAPI.gaps({}).then(r=>r.data) })
@@ -24,11 +25,23 @@ function AdminDashboard() {
     <div>
       <PageHeader title="System Administration"
         sub={`Full control · ${n.total_schools||0} schools · ${n.total_students||0} students`}
-        action={<Btn>📥 Export All Data</Btn>}/>
+        action={<Btn><Download size={16}/> Export All Data</Btn>}/>
 
-      {critAlerts>0 && <Alert type="danger"><strong>{critAlerts} critical alerts</strong> require immediate action across the system.</Alert>}
+      {critAlerts>0 && !critDismissed && (
+        <Alert type="danger" toast onClose={()=>setCritDismissed(true)}>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <strong>{critAlerts} critical alerts</strong> require immediate action.
+            <button
+              onClick={()=>window.location.href='/alerts'}
+              style={{border:'none',cursor:'pointer',background:'transparent',color:'#2563EB',fontWeight:800,padding:0}}
+            >
+              View Alerts
+            </button>
+          </div>
+        </Alert>
+      )}
 
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
         <StatCard label="Total Schools"  value={n.total_schools||0}  sub="Across 3 districts" icon={School} accent="blue"/>
         <StatCard label="Students"       value={n.total_students?(n.total_students/1000).toFixed(1)+'K':0} sub="Enrolled" icon={Users} accent="green"/>
         <StatCard label="Active Alerts"  value={alerts.length||0}    sub="Resource gaps" icon={AlertTriangle} accent="red" trend="down"/>
@@ -43,20 +56,31 @@ function AdminDashboard() {
             <DonutChart good={n.good_schools} moderate={n.moderate_schools} critical={n.critical_schools}/>
           </CardBody></Card>
           <Card><CardHeader title="Facilities Coverage"/><CardBody>
-            <ProgressBar label="Running Water"  have={n.schools_with_water}      need={n.total_schools} color="#06B6D4"/>
+            <ProgressBar label="Running Water"  have={n.schools_with_water}      need={n.total_schools} color="#3B82F6"/>
             <ProgressBar label="Electricity"    have={n.schools_with_electricity} need={n.total_schools} color="#F59E0B"/>
             <ProgressBar label="Library"        have={n.schools_with_library}     need={n.total_schools} color="#8B5CF6"/>
-            <ProgressBar label="ICT Lab"        have={n.schools_with_ict}         need={n.total_schools} color="#2563EB"/>
-            <ProgressBar label="GPS Verified"   have={n.schools_gps_verified}     need={n.total_schools} color="#10B981"/>
+            <ProgressBar label="ICT Lab"        have={n.schools_with_ict}         need={n.total_schools} color="#06B6D4"/>
+            <ProgressBar label="GPS Verified"   have={n.schools_gps_verified}     need={n.total_schools} color="#22C55E"/>
           </CardBody></Card>
-          <Card style={{gridColumn:'1/-1'}}><CardHeader title="Intervention Priority — Top Risk Schools" subtitle="Heuristic risk score (0–100) to guide rapid action"/>
+          <Card hover={false} style={{gridColumn:'1/-1', border:'none', boxShadow:'none', background:'transparent'}}><CardHeader title="Intervention Priority — Top Risk Schools" subtitle="Heuristic risk score (0–100) to guide rapid action"/>
             <CardBody>
               <Table columns={[
                 { key:'name', label:'School', render:(v,r)=><strong>{v}</strong> },
                 { key:'district', label:'District' },
-                { key:'status', label:'Status', render:v=><Badge status={v}/> },
-                { key:'pupil_teacher_ratio', label:'P:T', render:v=>v?`1:${v}`:'—' },
-                { key:'risk_score', label:'Risk', render:v=><Badge status={v>=70?'critical':v>=45?'moderate':'good'} label={`${v}/100`}/> },
+                { key:'status', label:'Status', render:v=><Badge status={v} dot={false}/> },
+                { key:'pupil_teacher_ratio', label:'P:T', render:v=>(
+                  <div style={{fontFamily:'monospace',textAlign:'center',width:'100%'}}>{v ? `1:${v}` : '—'}</div>
+                )},
+                { key:'risk_score', label:'Risk', render:v=>{
+                  const score = Number(v || 0)
+                  const color = score >= 35 ? '#EF4444' : score >= 25 ? '#F59E0B' : '#22C55E'
+                  return (
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <span style={{width:8,height:8,borderRadius:'50%',background:color}}/>
+                      <span style={{fontWeight:800,color}}>{score}/100</span>
+                    </div>
+                  )
+                }},
               ]} data={risk} empty="No risk data"/>
             </CardBody>
           </Card>
@@ -64,13 +88,13 @@ function AdminDashboard() {
             <CardBody>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={dists} barGap={6}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+                  <CartesianGrid stroke="#F1F5F9" vertical={false}/>
                   <XAxis dataKey="district" tick={{fontSize:12}} axisLine={false} tickLine={false}/>
                   <YAxis tick={{fontSize:11}} axisLine={false} tickLine={false}/>
                   <Tooltip contentStyle={{borderRadius:10,border:'1px solid var(--border)',fontSize:12}}/>
-                  <Legend/>
-                  <Bar dataKey="total_students" fill="#2563EB" name="Students" radius={[5,5,0,0]}/>
-                  <Bar dataKey="total_teachers" fill="#10B981" name="Teachers" radius={[5,5,0,0]}/>
+                  <Legend iconType="square" wrapperStyle={{ paddingTop: 10 }} />
+                  <Bar dataKey="total_students" fill="#3B82F6" name="Students" radius={[6,6,0,0]}/>
+                  <Bar dataKey="total_teachers" fill="#22C55E" name="Teachers" radius={[6,6,0,0]}/>
                 </BarChart>
               </ResponsiveContainer>
             </CardBody>
@@ -152,9 +176,9 @@ function REBDashboard() {
     <div>
       <PageHeader title="National Education Overview"
         sub={`Rwanda Education Board · ${n.total_schools||0} public schools`}
-        action={<Btn>📊 Export National Report</Btn>}/>
+        action={<Btn><Download size={16}/> Export National Report</Btn>}/>
       {n.critical_schools>0&&<Alert type="warning"><strong>{n.critical_schools} schools</strong> in critical condition — resource intervention required.</Alert>}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
         <StatCard label="Schools"    value={n.total_schools||0} sub="Public mapped" icon={School} accent="blue"/>
         <StatCard label="Students"   value={n.total_students?(n.total_students/1000).toFixed(1)+'K':'—'} sub="Enrolled" icon={Users} accent="green"/>
         <StatCard label="P:T Ratio"  value={`1:${ratio}`} sub="National average" icon={TrendingUp} accent="amber"/>
@@ -164,10 +188,10 @@ function REBDashboard() {
       {tab==='overview'&&(<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
         <Card><CardHeader title="Schools by Status"/><CardBody><DonutChart good={n.good_schools} moderate={n.moderate_schools} critical={n.critical_schools}/></CardBody></Card>
         <Card><CardHeader title="Facilities"/><CardBody>
-          <ProgressBar label="Water"       have={n.schools_with_water}      need={n.total_schools} color="#06B6D4"/>
+          <ProgressBar label="Water"       have={n.schools_with_water}      need={n.total_schools} color="#3B82F6"/>
           <ProgressBar label="Electricity" have={n.schools_with_electricity} need={n.total_schools} color="#F59E0B"/>
           <ProgressBar label="Library"     have={n.schools_with_library}     need={n.total_schools} color="#8B5CF6"/>
-          <ProgressBar label="ICT Lab"     have={n.schools_with_ict}         need={n.total_schools} color="#2563EB"/>
+          <ProgressBar label="ICT Lab"     have={n.schools_with_ict}         need={n.total_schools} color="#06B6D4"/>
         </CardBody></Card>
       </div>)}
       {tab==='districts'&&(
@@ -243,10 +267,10 @@ function DistrictDashboard() {
     <div>
       <PageHeader title={`${user?.district} District`}
         sub={`${schools.length} schools · ${stu.toLocaleString()} students`}
-        action={<Btn>📥 Export District Report</Btn>}/>
+        action={<Btn><Download size={16}/> Export District Report</Btn>}/>
       {critical>0&&<Alert type="danger"><strong>{critical} school{critical>1?'s':''}</strong> in critical condition — immediate action required.</Alert>}
       {alerts.filter(a=>a.level==='critical').length>0&&<Alert type="warning"><strong>{alerts.filter(a=>a.level==='critical').length} critical alerts</strong> active in your district.</Alert>}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
         <StatCard label="Schools"          value={schools.length} sub={user?.district} icon={School} accent="blue"/>
         <StatCard label="Students"         value={stu.toLocaleString()} sub="Enrolled" icon={Users} accent="green"/>
         <StatCard label="Pending Feedback" value={pending} sub="Need review" icon={AlertTriangle} accent="amber" trend={pending>0?'down':null}/>
@@ -263,13 +287,24 @@ function DistrictDashboard() {
           <ProgressBar label="Toilets"   have={gaps.toilets?.have}   need={gaps.toilets?.need}/>
           <ProgressBar label="Classrooms"have={gaps.classrooms?.have}need={gaps.classrooms?.need}/>
         </CardBody></Card>
-        <Card style={{gridColumn:'1/-1'}}><CardHeader title="Top Risk Schools (Your District)" subtitle="Prioritize site visits and interventions"/>
+        <Card hover={false} style={{gridColumn:'1/-1', border:'none', boxShadow:'none', background:'transparent'}}><CardHeader title="Top Risk Schools (Your District)" subtitle="Prioritize site visits and interventions"/>
           <CardBody>
             <Table columns={[
               { key:'name', label:'School', render:(v)=> <strong>{v}</strong> },
-              { key:'status', label:'Status', render:v=> <Badge status={v}/> },
-              { key:'pupil_teacher_ratio', label:'P:T', render:v=>v?`1:${v}`:'—' },
-              { key:'risk_score', label:'Risk', render:v=><Badge status={v>=70?'critical':v>=45?'moderate':'good'} label={`${v}/100`}/> },
+              { key:'status', label:'Status', render:v=> <Badge status={v} dot={false}/> },
+              { key:'pupil_teacher_ratio', label:'P:T', render:v=>(
+                <div style={{fontFamily:'monospace',textAlign:'center',width:'100%'}}>{v ? `1:${v}` : '—'}</div>
+              ) },
+              { key:'risk_score', label:'Risk', render:v=>{
+                const score = Number(v || 0)
+                const color = score >= 35 ? '#EF4444' : score >= 25 ? '#F59E0B' : '#22C55E'
+                return (
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{width:8,height:8,borderRadius:'50%',background:color}}/>
+                    <span style={{fontWeight:900,color}}>{score}/100</span>
+                  </div>
+                )
+              } },
             ]} data={risk} empty="No risk data"/>
           </CardBody>
         </Card>

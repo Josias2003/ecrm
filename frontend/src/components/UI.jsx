@@ -16,6 +16,18 @@ export const CSS = `
   --sh:0 4px 16px rgba(0,0,0,.08);
   --sh-lg:0 12px 40px rgba(0,0,0,.12);
 }
+:root{
+  --navy:#0F172A;--navy2:#111D33;--navy3:#1E3050;
+  --blue:#3B82F6;--blue-h:#2563EB;--blue-lt:#EFF6FF;--blue-md:#BFDBFE;
+  --cyan:#14B8A6;--green:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;
+  --bg:#F8FAFC;--bg2:#FFFFFF;--white:#fff;
+  --border:#E2E8F0;--border2:#CBD5E1;
+  --text:#0F172A;--text2:#64748B;--text3:#94A3B8;
+  --r:12px;--r-lg:16px;
+  --sh-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --sh:0 4px 16px rgba(0,0,0,.08);
+  --sh-lg:0 12px 40px rgba(0,0,0,.12);
+}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 h1,h2,h3{font-family:'Syne',sans-serif}
 button,input,select,textarea{font-family:inherit}
@@ -33,9 +45,9 @@ a{text-decoration:none;color:inherit}
 /* ── BADGE ─────────────────────────────────────────────────────── */
 const BS = {
   good:     {bg:'#ECFDF5',c:'#065F46',dot:'#10B981'},
-  moderate: {bg:'#FFFBEB',c:'#92400E',dot:'#F59E0B'},
+  moderate: {bg:'#FEF3C7',c:'#92400E',dot:'#F59E0B'},
   critical: {bg:'#FEF2F2',c:'#991B1B',dot:'#EF4444'},
-  pending:  {bg:'#FFFBEB',c:'#92400E',dot:'#F59E0B'},
+  pending:  {bg:'#FEF3C7',c:'#92400E',dot:'#F59E0B'},
   reviewed: {bg:'#EFF6FF',c:'#1E40AF',dot:'#2563EB'},
   resolved: {bg:'#ECFDF5',c:'#065F46',dot:'#10B981'},
   Active:   {bg:'#ECFDF5',c:'#065F46',dot:'#10B981'},
@@ -46,14 +58,14 @@ const BS = {
   Primary:  {bg:'#F5F3FF',c:'#5B21B6',dot:'#8B5CF6'},
   Secondary:{bg:'#FFF7ED',c:'#9A3412',dot:'#F97316'},
 }
-export const Badge = ({ status, label, size = 'sm' }) => {
+export const Badge = ({ status, label, size = 'sm', dot = true }) => {
   const s = BS[status] || {bg:'#F1F5F9',c:'#475569',dot:'#94A3B8'}
   return (
     <span style={{display:'inline-flex',alignItems:'center',gap:5,
-      padding: size==='lg' ? '5px 12px' : '3px 9px',
+      padding: size==='lg' ? '6px 12px' : '4px 10px',
       borderRadius:20,fontSize: size==='lg' ? 13 : 11.5,fontWeight:600,
       background:s.bg,color:s.c}}>
-      <span style={{width:6,height:6,borderRadius:'50%',background:s.dot,flexShrink:0}}/>
+      {dot && <span style={{width:6,height:6,borderRadius:'50%',background:s.dot,flexShrink:0}}/>}
       {label ?? status}
     </span>
   )
@@ -63,27 +75,67 @@ export const Badge = ({ status, label, size = 'sm' }) => {
 const ACCENTS = {blue:'#2563EB',green:'#10B981',amber:'#F59E0B',red:'#EF4444',cyan:'#06B6D4',purple:'#8B5CF6'}
 export const StatCard = ({ label, value, sub, icon: Icon, accent='blue', trend }) => {
   const c = ACCENTS[accent]
+  const isAlert = accent === 'red'
   return (
-    <div style={{background:'#fff',borderRadius:14,padding:'20px 22px',border:'1px solid var(--border)',
-      boxShadow:'var(--sh-sm)',borderTop:`3px solid ${c}`,position:'relative',overflow:'hidden',
-      transition:'transform .2s,box-shadow .2s',cursor:'default'}}
-      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='var(--sh)'}}
-      onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='var(--sh-sm)'}}>
-      {Icon && <Icon size={28} style={{position:'absolute',right:18,top:18,color:c,opacity:.13}}/>}
-      <div style={{fontSize:11,fontWeight:600,color:'var(--text2)',textTransform:'uppercase',letterSpacing:.6}}>{label}</div>
-      <div style={{fontFamily:'Syne',fontSize:30,fontWeight:800,color:'var(--text)',margin:'6px 0 4px',lineHeight:1}}>{value ?? '—'}</div>
-      {sub && <div style={{fontSize:12,color:trend==='down'?'var(--red)':trend==='up'?'var(--green)':'var(--text2)',fontWeight:500}}>{sub}</div>}
+    <div style={{
+      background:'#fff',
+      borderRadius:12,
+      padding:'20px 20px',
+      border:'1px solid #E2E8F0',
+      boxShadow:'var(--sh-sm)',
+      borderBottom:`3px solid ${c}`,
+      position:'relative',
+      overflow:'hidden',
+      transition:'transform 200ms ease, box-shadow 200ms ease',
+      cursor:'default',
+      transform:'translateZ(0)',
+    }}
+      onMouseEnter={e=>{
+        e.currentTarget.style.transform='translateY(-2px)'
+        e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'
+      }}
+      onMouseLeave={e=>{
+        e.currentTarget.style.transform=''
+        e.currentTarget.style.boxShadow='var(--sh-sm)'
+      }}>
+      {Icon && <Icon size={20} style={{position:'absolute',right:16,top:16,color:c,opacity:.16}}/>}
+      <div style={{fontSize:12,fontWeight:600,color:'#64748B',textTransform:'uppercase',letterSpacing:'0.05em'}}>{label}</div>
+      <div style={{fontSize:32,fontWeight:700,color:isAlert ? c : '#0F172A',margin:'8px 0 6px',lineHeight:1}}>{value ?? '—'}</div>
+      {sub && (
+        <div style={{fontSize:13,color:isAlert ? c : '#94A3B8',fontWeight:600}}>
+          {sub}
+        </div>
+      )}
     </div>
   )
 }
 
 /* ── CARD ──────────────────────────────────────────────────────── */
-export const Card = ({ children, style }) => (
-  <div style={{background:'#fff',borderRadius:14,border:'1px solid var(--border)',
-    boxShadow:'var(--sh-sm)',overflow:'hidden',...style}}>{children}</div>
+export const Card = ({ children, style, hover = true }) => (
+  <div
+    style={{
+      background:'#fff',
+      borderRadius:12,
+      border:'1px solid #E2E8F0',
+      boxShadow:'var(--sh-sm)',
+      overflow:'hidden',
+      transition:'transform 200ms ease, box-shadow 200ms ease',
+      ...style
+    }}
+    onMouseEnter={hover ? (e=>{
+      e.currentTarget.style.transform='translateY(-2px)'
+      e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'
+    }) : undefined}
+    onMouseLeave={hover ? (e=>{
+      e.currentTarget.style.transform=''
+      e.currentTarget.style.boxShadow='var(--sh-sm)'
+    }) : undefined}
+  >
+    {children}
+  </div>
 )
 export const CardHeader = ({ title, subtitle, action }) => (
-  <div style={{padding:'18px 22px 0',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+  <div style={{padding:'18px 20px 0',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
     <div>
       <div style={{fontWeight:700,fontSize:14.5,color:'var(--text)'}}>{title}</div>
       {subtitle && <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{subtitle}</div>}
@@ -91,20 +143,22 @@ export const CardHeader = ({ title, subtitle, action }) => (
     {action}
   </div>
 )
-export const CardBody = ({ children, style }) => <div style={{padding:'18px 22px',...style}}>{children}</div>
+export const CardBody = ({ children, style }) => <div style={{padding:'18px 20px',...style}}>{children}</div>
 
 /* ── PROGRESS BAR ──────────────────────────────────────────────── */
 export const ProgressBar = ({ label, have, need, color }) => {
   const pct = Math.min((have / Math.max(need,1))*100, 100)
-  const c = color || (pct>80?'#10B981':pct>50?'#F59E0B':'#EF4444')
+  const c = color || (pct>80?'#22C55E':pct>50?'#F59E0B':'#EF4444')
   return (
-    <div style={{marginBottom:14}}>
-      <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
-        <span style={{fontSize:13,fontWeight:500}}>{label}</span>
-        <span style={{fontSize:13,fontWeight:700,color:c}}>{(have||0).toLocaleString()} / {(need||0).toLocaleString()}</span>
+    <div style={{padding:'10px 0',borderBottom:'1px solid #EEF2F7',minHeight:40}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+        <span style={{fontSize:13,fontWeight:600,color:'#64748B'}}>{label}</span>
+        <span style={{fontSize:13,fontWeight:700,color:c,whiteSpace:'nowrap'}}>
+          {(have||0).toLocaleString()} / {(need||0).toLocaleString()}
+        </span>
       </div>
-      <div style={{height:7,background:'var(--bg)',borderRadius:99,overflow:'hidden'}}>
-        <div style={{height:'100%',width:`${pct}%`,background:c,borderRadius:99,transition:'width .6s ease'}}/>
+      <div style={{height:8,background:'#F1F5F9',borderRadius:999,overflow:'hidden'}}>
+        <div style={{height:'100%',width:`${pct}%`,background:c,borderRadius:999,transition:'width .6s ease'}}/>
       </div>
     </div>
   )
@@ -113,13 +167,14 @@ export const ProgressBar = ({ label, have, need, color }) => {
 /* ── DONUT CHART ───────────────────────────────────────────────── */
 export const DonutChart = ({ good=0, moderate=0, critical=0 }) => {
   const total = good+moderate+critical || 1
-  const R=40, cx=50, cy=50, circ=2*Math.PI*R
+  const size = 140
+  const R=52, cx=size/2, cy=size/2, circ=2*Math.PI*R
   const slices = [{v:good,c:'#10B981'},{v:moderate,c:'#F59E0B'},{v:critical,c:'#EF4444'}]
   let off=0
   return (
     <div style={{display:'flex',alignItems:'center',gap:24}}>
-      <svg width={100} height={100} viewBox="0 0 100 100">
-        <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--border)" strokeWidth={13}/>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--border)" strokeWidth={14}/>
         {slices.map((s,i)=>{
           const dash=(s.v/total)*circ
           const el=<circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={s.c}
@@ -127,15 +182,18 @@ export const DonutChart = ({ good=0, moderate=0, critical=0 }) => {
             strokeDashoffset={-off} transform="rotate(-90 50 50)"/>
           off+=dash; return el
         })}
-        <text x="50" y="46" textAnchor="middle" fontSize="12" fontWeight="800"
-          fill="var(--text)" fontFamily="Syne">{good+moderate+critical}</text>
-        <text x="50" y="59" textAnchor="middle" fontSize="8" fill="var(--text2)">schools</text>
+        <text x={cx} y={cy-6} textAnchor="middle" fontSize="18" fontWeight="900"
+          fill="#0F172A" fontFamily="Syne">{total}</text>
+        <text x={cx} y={cy+15} textAnchor="middle" fontSize="12" fill="#94A3B8" fontWeight="700">Schools</text>
       </svg>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {[['Good',good,'#10B981'],['Moderate',moderate,'#F59E0B'],['Critical',critical,'#EF4444']].map(([l,n,c])=>(
-          <div key={l} style={{display:'flex',alignItems:'center',gap:8,fontSize:13}}>
-            <span style={{width:10,height:10,borderRadius:'50%',background:c,flexShrink:0}}/>
-            <strong>{n}</strong><span style={{color:'var(--text2)'}}>{l}</span>
+        {[['Good',good,'#22C55E'],['Moderate',moderate,'#F59E0B'],['Critical',critical,'#EF4444']].map(([l,n,c])=>(
+          <div key={l} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,fontSize:13}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{width:8,height:8,borderRadius:'50%',background:c,flexShrink:0}}/>
+              <span style={{color:'#64748B',fontWeight:600}}>{l}</span>
+            </div>
+            <strong style={{color:'#0F172A'}}>{n}</strong>
           </div>
         ))}
       </div>
@@ -155,16 +213,21 @@ export const Btn = ({children,onClick,variant='primary',size='md',disabled,type=
   }
   const S = {
     sm: {padding:'5px 12px',fontSize:12,borderRadius:8},
-    md: {padding:'9px 18px',fontSize:13.5,borderRadius:10},
-    lg: {padding:'12px 24px',fontSize:14,borderRadius:11},
+    md: {padding:'12px 20px',fontSize:14,borderRadius:12},
+    lg: {padding:'14px 26px',fontSize:14,borderRadius:12},
   }
   return (
     <button type={type} onClick={onClick} disabled={disabled}
       style={{display:'inline-flex',alignItems:'center',gap:7,fontWeight:600,
         cursor:disabled?'not-allowed':'pointer',opacity:disabled?.6:1,
-        transition:'all .15s',...V[variant],...S[size],...style}}
+        transition:'all 150ms ease',...V[variant],...S[size],...style}}
       onMouseEnter={e=>{if(!disabled&&variant==='primary')e.currentTarget.style.background='var(--blue-h)'}}
-      onMouseLeave={e=>{if(!disabled&&variant==='primary')e.currentTarget.style.background='var(--blue)'}}>
+      onMouseLeave={e=>{
+        if(!disabled&&variant==='primary')e.currentTarget.style.background='var(--blue)'
+        if(!disabled)e.currentTarget.style.transform='scale(1)'
+      }}
+      onMouseDown={e=>{if(!disabled)e.currentTarget.style.transform='scale(0.97)'}}
+      onMouseUp={e=>{if(!disabled)e.currentTarget.style.transform='scale(1)'}}>
       {children}
     </button>
   )
@@ -227,12 +290,27 @@ export const Modal = ({open,onClose,title,children,width=560}) => {
 /* ── DATA TABLE ────────────────────────────────────────────────── */
 export const Table = ({columns,data,empty='No records found',loading}) => (
   <div style={{overflowX:'auto'}}>
-    <table style={{width:'100%',borderCollapse:'collapse'}}>
+    <table style={{width:'100%',borderCollapse:'collapse',minWidth:560}}>
       <thead>
         <tr>{columns.map(c=>(
-          <th key={c.key} style={{fontSize:11,fontWeight:700,color:'var(--text2)',
-            textTransform:'uppercase',letterSpacing:.6,padding:'10px 14px',
-            textAlign:'left',borderBottom:'2px solid var(--border)',whiteSpace:'nowrap'}}>
+          <th
+            key={c.key}
+            style={{
+              position:'sticky',
+              top:0,
+              zIndex:3,
+              fontSize:11,
+              fontWeight:700,
+              color:'#94A3B8',
+              textTransform:'uppercase',
+              letterSpacing:'0.05em',
+              padding:'10px 14px',
+              textAlign:'left',
+              background:'#F8FAFC',
+              borderBottom:'1px solid #E2E8F0',
+              whiteSpace:'nowrap',
+            }}
+          >
             {c.label}
           </th>
         ))}</tr>
@@ -243,11 +321,26 @@ export const Table = ({columns,data,empty='No records found',loading}) => (
         ) : data.length===0 ? (
           <tr><td colSpan={columns.length} style={{padding:40,textAlign:'center',color:'var(--text3)',fontSize:14}}>{empty}</td></tr>
         ) : data.map((row,i)=>(
-          <tr key={i}
-            onMouseEnter={e=>e.currentTarget.style.background='var(--bg2)'}
-            onMouseLeave={e=>e.currentTarget.style.background=''}>
-            {columns.map(c=>(
-              <td key={c.key} style={{padding:'11px 14px',borderBottom:'1px solid var(--bg)',fontSize:13,...(c.style||{})}}>
+          <tr
+            key={i}
+            style={{height:48, background: i%2===1 ? '#FAFAFA' : '#fff', transition:'background 150ms ease'}}
+            onMouseEnter={e=>{e.currentTarget.style.background='#F8FAFC'}}
+            onMouseLeave={e=>{e.currentTarget.style.background=i%2===1 ? '#FAFAFA' : '#fff'}}
+          >
+            {columns.map((c,colIdx)=>(
+              <td
+                key={c.key}
+                style={{
+                  padding:'0 14px',
+                  borderBottom:'1px solid #EEF2F7',
+                  fontSize:13,
+                  verticalAlign:'middle',
+                  ...(c.style || {}),
+                  ...(colIdx===0
+                    ? { position:'sticky', left:0, background:'#fff', zIndex:2 }
+                    : {}),
+                }}
+              >
                 {c.render ? c.render(row[c.key],row) : row[c.key]}
               </td>
             ))}
@@ -260,15 +353,15 @@ export const Table = ({columns,data,empty='No records found',loading}) => (
 
 /* ── TABS ──────────────────────────────────────────────────────── */
 export const Tabs = ({tabs,active,onChange}) => (
-  <div style={{display:'flex',gap:3,background:'var(--bg)',padding:4,
-    borderRadius:10,width:'fit-content',marginBottom:20}}>
+  <div style={{display:'flex',gap:3,background:'#F1F5F9',padding:4,
+    borderRadius:12,width:'fit-content',marginBottom:20}}>
     {tabs.map(t=>(
       <button key={t.id} onClick={()=>onChange(t.id)}
-        style={{padding:'7px 15px',borderRadius:7,fontSize:13,fontWeight:600,
+        style={{padding:'8px 16px',borderRadius:999,fontSize:14,fontWeight:500,
           cursor:'pointer',border:'none',transition:'all .15s',
           background:active===t.id?'#fff':'transparent',
-          color:active===t.id?'var(--text)':'var(--text2)',
-          boxShadow:active===t.id?'var(--sh-sm)':'none'}}>
+          color:active===t.id?'#0F172A':'#64748B',
+          boxShadow:active===t.id?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>
         {t.label}{t.badge?` (${t.badge})`:''}
       </button>
     ))}
@@ -276,7 +369,7 @@ export const Tabs = ({tabs,active,onChange}) => (
 )
 
 /* ── ALERT BANNER ──────────────────────────────────────────────── */
-export const Alert = ({type='info',children,onClose}) => {
+export const Alert = ({type='info',children,onClose, toast = false}) => {
   const M = {
     info:    {bg:'#EFF6FF',border:'#BFDBFE',c:'#1E40AF',Icon:Info},
     warning: {bg:'#FFFBEB',border:'#FDE68A',c:'#92400E',Icon:AlertTriangle},
@@ -284,9 +377,25 @@ export const Alert = ({type='info',children,onClose}) => {
     success: {bg:'#ECFDF5',border:'#A7F3D0',c:'#065F46',Icon:CheckCircle},
   }[type]||{}
   return (
-    <div style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',
-      borderRadius:10,marginBottom:16,background:M.bg,
-      border:`1px solid ${M.border}`,color:M.c,fontSize:13}}>
+    <div
+      style={{
+        display:'flex',
+        alignItems:'center',
+        gap:10,
+        padding:'11px 14px',
+        borderRadius:12,
+        marginBottom: toast ? 0 : 16,
+        background:M.bg,
+        border:`1px solid ${M.border}`,
+        color:M.c,
+        fontSize:13,
+        boxShadow:'0 4px 12px rgba(0,0,0,0.06)',
+        transition:'transform 150ms ease',
+        ...(toast
+          ? { position:'fixed', top:80, right:24, zIndex:1200, width:440, maxWidth:'calc(100vw - 48px)' }
+          : {}),
+      }}
+    >
       {M.Icon && <M.Icon size={16} style={{flexShrink:0}}/>}
       <div style={{flex:1}}>{children}</div>
       {onClose && <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:M.c,fontSize:16,lineHeight:1}}>×</button>}
@@ -318,7 +427,7 @@ export const Empty = ({icon='📭',title='Nothing here',desc}) => (
 export const PageHeader = ({title,sub,action}) => (
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:22}}>
     <div>
-      <h1 style={{fontFamily:'Syne',fontSize:22,fontWeight:800,color:'var(--text)'}}>{title}</h1>
+      <h1 style={{fontFamily:'Inter',fontSize:22,fontWeight:700,color:'#0F172A'}}>{title}</h1>
       {sub&&<p style={{fontSize:13,color:'var(--text2)',marginTop:3}}>{sub}</p>}
     </div>
     {action}
