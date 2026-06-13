@@ -76,7 +76,7 @@ export function SchoolsPage() {
   const [form, setForm] = useState(EMPTY_SCHOOL)
   const [page, setPage] = useState(1)
   const lockDistrict = ['district', 'enumerator'].includes(user?.role)
-  const showMapToggle = ['reb', 'district', 'enumerator'].includes(user?.role)
+  const showMapToggle = ['admin', 'reb', 'district', 'enumerator'].includes(user?.role)
 
   useEffect(() => { setPage(1) }, [fd, fs, ft, q])
   useEffect(() => {
@@ -140,12 +140,13 @@ export function SchoolsPage() {
   }
 
   const canEditSchool = (s) => {
+    if (user?.role === 'admin') return true
     if (user?.role === 'district' || user?.role === 'enumerator') return true
     if (user?.role === 'school') return s.id === user.school_id
     return false
   }
-  const canEdit = user?.role === 'district' || user?.role === 'enumerator' || user?.role === 'school'
-  const canDel  = user?.role === 'district'
+  const canEdit = user?.role === 'admin' || user?.role === 'district' || user?.role === 'enumerator' || user?.role === 'school'
+  const canDel  = user?.role === 'admin' || user?.role === 'district'
 
   const mySchool = user?.role === 'school' ? schools[0] : null
 
@@ -498,7 +499,7 @@ export function TeachersPage() {
   const set = k=>e=>setForm(p=>({...p,[k]:e.target.type==='number'?Number(e.target.value):e.target.value}))
   const qualData = ['A2','A1','A0','Masters','PhD'].map(q=>({name:q,value:teachers.filter(t=>t.qualification===q).length})).filter(d=>d.value>0)
   const COLORS = ['#2563EB','#10B981','#F59E0B','#8B5CF6','#EF4444']
-  const canEdit = ['district','school'].includes(user?.role)
+  const canEdit = ['admin', 'district', 'school'].includes(user?.role)
   const subjectList = coverage.subjects || []
   const schoolStu = coverage.students ?? 0
   const schoolTea = coverage.total_teachers ?? teacherTotal
@@ -1098,29 +1099,39 @@ export function AlertsPage() {
 // ════════════════════════════════════════════════════════════════════
 export function AnalyticsPage() {
   const { user } = useAuth()
-  const isReb = user?.role === 'reb'
+  const showNational = ['reb', 'admin'].includes(user?.role)
   const district = user?.role === 'district' ? user.district : undefined
-  const { data: n={} }     = useQuery({ queryKey:['national'], queryFn:()=>analyticsAPI.national().then(r=>r.data), enabled: isReb })
+  const { data: n={} }     = useQuery({ queryKey:['national'], queryFn:()=>analyticsAPI.national().then(r=>r.data), enabled: showNational })
   const { data: dists=[] } = useQuery({ queryKey:['districts'], queryFn:()=>analyticsAPI.districts().then(r=>r.data) })
   const { data: gaps={} }  = useQuery({ queryKey:['gaps',district], queryFn:()=>analyticsAPI.gaps({ district }).then(r=>r.data) })
   const { data: trends=[] }= useQuery({ queryKey:['trends-all',district], queryFn:()=>analyticsAPI.trends({ district }).then(r=>r.data) })
   const { data: gis={} }   = useQuery({ queryKey:['gis-sum'], queryFn:()=>analyticsAPI.gisSummary().then(r=>r.data) })
 
+  const myDist = district ? dists.find(d => d.district === district) : null
+  const topStats = showNational ? n : myDist ? {
+    good_schools: myDist.good_schools,
+    moderate_schools: myDist.moderate_schools,
+    critical_schools: myDist.critical_schools,
+    total_schools: myDist.total_schools,
+  } : {}
+
+  const chartDists = district ? dists.filter(d => d.district === district) : dists
+
   return (
     <div>
-      <PageHeader title="Analytics" sub="Comprehensive insights across all schools and districts"/>
+      <PageHeader title="Analytics" sub={district ? `${district} district insights` : 'Comprehensive insights across schools and districts'}/>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
-        <StatCard label="Good Schools"     value={n.good_schools||0}     sub={`${n.total_schools?Math.round((n.good_schools/n.total_schools)*100):0}% of total`} accent="green"/>
-        <StatCard label="Moderate Schools" value={n.moderate_schools||0} sub={`${n.total_schools?Math.round((n.moderate_schools/n.total_schools)*100):0}% of total`} accent="amber"/>
-        <StatCard label="Critical Schools" value={n.critical_schools||0} sub={`${n.total_schools?Math.round((n.critical_schools/n.total_schools)*100):0}% of total`} accent="red" trend="down"/>
+        <StatCard label="Good Schools"     value={topStats.good_schools||0}     sub={`${topStats.total_schools?Math.round((topStats.good_schools/topStats.total_schools)*100):0}% of total`} accent="green"/>
+        <StatCard label="Moderate Schools" value={topStats.moderate_schools||0} sub={`${topStats.total_schools?Math.round((topStats.moderate_schools/topStats.total_schools)*100):0}% of total`} accent="amber"/>
+        <StatCard label="Critical Schools" value={topStats.critical_schools||0} sub={`${topStats.total_schools?Math.round((topStats.critical_schools/topStats.total_schools)*100):0}% of total`} accent="red" trend="down"/>
         <StatCard label="GPS Coverage"     value={`${gis.coverage_pct||0}%`} sub={`${gis.gps_verified||0} verified`} accent="cyan"/>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18,marginBottom:18}}>
-        <Card><CardHeader title="Students by District"/><CardBody>
+        <Card><CardHeader title={district ? 'Students in District' : 'Students by District'}/><CardBody>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={dists} barGap={8}>
+            <BarChart data={chartDists} barGap={8}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
               <XAxis dataKey="district" tick={{fontSize:12}} axisLine={false} tickLine={false}/>
               <YAxis tick={{fontSize:11}} axisLine={false} tickLine={false}/>
@@ -1130,9 +1141,9 @@ export function AnalyticsPage() {
           </ResponsiveContainer>
         </CardBody></Card>
 
-        <Card><CardHeader title="Status Distribution by District"/><CardBody>
+        <Card><CardHeader title={district ? 'Status in District' : 'Status Distribution by District'}/><CardBody>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={dists}>
+            <BarChart data={chartDists}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
               <XAxis dataKey="district" tick={{fontSize:12}} axisLine={false} tickLine={false}/>
               <YAxis tick={{fontSize:11}} axisLine={false} tickLine={false}/>

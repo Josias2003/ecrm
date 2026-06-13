@@ -2,9 +2,11 @@ import { Loader2, AlertTriangle, CheckCircle, Info, X, ChevronDown } from 'lucid
 
 /* ── DESIGN TOKENS ─────────────────────────────────────────────── */
 export const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900;1,14..32,300..900&family=Syne:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root,[data-theme="light"]{
+  --font-body:'Source Sans 3',system-ui,sans-serif;
+  --font-heading:'Source Serif 4',Georgia,serif;
   --navy:#0F172A;--navy2:#111D33;--navy3:#1E3050;
   --blue:#3B82F6;--blue-h:#2563EB;--blue-lt:#EFF6FF;--blue-md:#BFDBFE;
   --cyan:#14B8A6;--green:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;
@@ -29,8 +31,8 @@ export const CSS = `
   --sh:0 4px 16px rgba(0,0,0,.35);
   --sh-lg:0 12px 40px rgba(0,0,0,.45);
 }
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-h1,h2,h3{font-family:'Syne',sans-serif}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-heading);font-weight:700}
 button,input,select,textarea{font-family:inherit}
 a{text-decoration:none;color:inherit}
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -185,7 +187,7 @@ export const DonutChart = ({ good=0, moderate=0, critical=0 }) => {
           off+=dash; return el
         })}
         <text x={cx} y={cy-6} textAnchor="middle" fontSize="18" fontWeight="900"
-          fill="#0F172A" fontFamily="Syne">{total}</text>
+          fill="#0F172A" fontFamily="Source Serif 4, Georgia, serif">{total}</text>
         <text x={cx} y={cy+15} textAnchor="middle" fontSize="12" fill="#94A3B8" fontWeight="700">Schools</text>
       </svg>
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -505,7 +507,7 @@ export const PageLoad = () => (
 export const Empty = ({icon='📭',title='Nothing here',desc}) => (
   <div style={{textAlign:'center',padding:'48px 20px'}}>
     <div style={{fontSize:48,marginBottom:12,opacity:.4}}>{icon}</div>
-    <div style={{fontFamily:'Syne',fontSize:15,fontWeight:700,color:'var(--text)',marginBottom:6}}>{title}</div>
+    <div style={{fontFamily:'var(--font-heading)',fontSize:15,fontWeight:700,color:'var(--text)',marginBottom:6}}>{title}</div>
     {desc&&<div style={{fontSize:13.5,color:'var(--text2)'}}>{desc}</div>}
   </div>
 )
@@ -514,7 +516,7 @@ export const Empty = ({icon='📭',title='Nothing here',desc}) => (
 export const PageHeader = ({title,sub,action}) => (
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:22}}>
     <div>
-      <h1 style={{fontFamily:'Inter',fontSize:22,fontWeight:700,color:'var(--text)'}}>{title}</h1>
+      <h1 style={{fontFamily:'var(--font-heading)',fontSize:22,fontWeight:700,color:'var(--text)'}}>{title}</h1>
       {sub&&<p style={{fontSize:13,color:'var(--text2)',marginTop:3}}>{sub}</p>}
     </div>
     {action}

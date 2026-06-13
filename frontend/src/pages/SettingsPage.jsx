@@ -1,13 +1,27 @@
+import { useNavigate } from 'react-router-dom'
 import { useTheme } from '../store/theme'
+import { useAuth } from '../store/auth'
+import { canSubmitServiceRequest } from '../utils/permissions'
 import { PageHeader, Card, CardBody, Btn } from '../components/UI'
-
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
+  const { user } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <div>
       <PageHeader title="Settings" sub="Appearance and preferences" />
-      <Card style={{ maxWidth: 480 }}>
+      {canSubmitServiceRequest(user?.role) && (
+        <Card style={{ maxWidth: 480, marginBottom: 16 }}>
+          <CardBody>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Need help from system admin?</div>
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>
+              Submit a service request for role changes, account issues, or data corrections.
+            </p>
+            <Btn variant="outline" onClick={() => navigate('/requests')}>Service Requests</Btn>
+          </CardBody>
+        </Card>
+      )}      <Card style={{ maxWidth: 480 }}>
         <CardBody>
           <div style={{ fontWeight: 700, marginBottom: 12 }}>Theme</div>
           <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>

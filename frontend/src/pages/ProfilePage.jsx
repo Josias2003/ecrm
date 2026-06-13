@@ -12,6 +12,8 @@ const ROLE_LABELS = {
 export default function ProfilePage() {
   const { user, hydrate } = useAuth()
   const [name, setName] = useState(user?.full_name || '')
+  const [phone, setPhone] = useState(user?.phone || '')
+  const [organization, setOrganization] = useState(user?.organization || '')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -21,7 +23,11 @@ export default function ProfilePage() {
     if (!name.trim()) { toast.error('Name is required'); return }
     setSaving(true)
     try {
-      await authAPI.updateProfile({ full_name: name.trim() })
+      await authAPI.updateProfile({
+        full_name: name.trim(),
+        phone: phone.trim() || null,
+        organization: organization.trim() || null,
+      })
       await hydrate()
       toast.success('Profile updated')
     } catch (e) {
@@ -66,6 +72,12 @@ export default function ProfilePage() {
             <Field label="Full name">
               <Input value={name} onChange={e => setName(e.target.value)} />
             </Field>
+            <Field label="Phone">
+              <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+250 7XX XXX XXX" />
+            </Field>
+            <Field label="Organization">
+              <Input value={organization} onChange={e => setOrganization(e.target.value)} placeholder="School or institution" />
+            </Field>
             <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
               District: <strong>{user?.district || 'National'}</strong>
             </div>
@@ -78,21 +90,18 @@ export default function ProfilePage() {
         <Card>
           <CardBody>
             <div style={{ fontWeight: 700, marginBottom: 16 }}>Change Password</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <Field label="Current password">
-                <Input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} />
-              </Field>
-              <Field label="New password">
-                <Input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} />
-              </Field>
-              <Field label="Confirm new password">
-                <Input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} />
-              </Field>
-              <Btn onClick={changePassword} disabled={saving}>Update Password</Btn>
+            <Field label="Current password">
+              <Input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} />
+            </Field>
+            <Field label="New password">
+              <Input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} />
+            </Field>
+            <Field label="Confirm new password">
+              <Input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} />
+            </Field>
+            <div style={{ marginTop: 20 }}>
+              <Btn onClick={changePassword} disabled={saving}>{saving ? 'Saving...' : 'Change Password'}</Btn>
             </div>
-            <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 14 }}>
-              Forgot your password? Contact your system administrator to reset it.
-            </p>
           </CardBody>
         </Card>
       </div>

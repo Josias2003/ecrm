@@ -44,15 +44,37 @@ class UserUpdate(BaseModel):
 
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
+    phone: Optional[str] = None
+    organization: Optional[str] = None
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class RegisterRequest(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+    role: RoleEnum
+    phone: Optional[str] = None
+    organization: Optional[str] = None
+    district: Optional[str] = None
+    school_id: Optional[int] = None
+
+class RegistrationReview(BaseModel):
+    role: Optional[RoleEnum] = None
+    district: Optional[str] = None
+    school_id: Optional[int] = None
+    rejection_reason: Optional[str] = None
+
 class UserOut(BaseModel):
     id: int; full_name: str; email: str; role: str
     district: Optional[str]; school_id: Optional[int]
     school_name: Optional[str] = None
+    phone: Optional[str] = None
+    organization: Optional[str] = None
+    account_status: str = "active"
+    rejection_reason: Optional[str] = None
     is_active: bool; created_at: datetime
     class Config: from_attributes = True
 
@@ -248,17 +270,63 @@ class ReportMeta(BaseModel):
     type: str
     label: str
     description: str
+    category: str = "overview"
+    category_label: str = "Overview"
+    dated: bool = False
 
 class ReportPreview(BaseModel):
     type: str
     label: str
     description: str
+    category: str = "overview"
+    category_label: str = "Overview"
     period_from: str
     period_to: str
     generated_at: datetime
     summary: dict
     insights: List[str] = []
     rows: List[dict] = []
+
+class ReportAssigneeOut(BaseModel):
+    id: int
+    full_name: str
+    role: str
+    district: Optional[str] = None
+    school_id: Optional[int] = None
+
+class ReportAssignmentCreate(BaseModel):
+    report_type: str
+    title: str
+    instructions: Optional[str] = None
+    assigned_to_id: int
+    school_id: Optional[int] = None
+    due_date: Optional[str] = None
+
+class ReportAssignmentUpdate(BaseModel):
+    status: Optional[str] = None
+    response_note: Optional[str] = None
+    reviewer_note: Optional[str] = None
+
+class ReportAssignmentOut(BaseModel):
+    id: int
+    report_type: str
+    report_label: str
+    title: str
+    instructions: Optional[str] = None
+    requested_by_id: int
+    requested_by_name: Optional[str] = None
+    assigned_to_id: int
+    assigned_to_name: Optional[str] = None
+    district: Optional[str] = None
+    school_id: Optional[int] = None
+    school_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    status: str
+    response_note: Optional[str] = None
+    reviewer_note: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
 
 # ── ANALYTICS ─────────────────────────────────────────────────────
 class DistrictStats(BaseModel):
@@ -275,5 +343,59 @@ class NationalStats(BaseModel):
     schools_with_water: int; schools_with_electricity: int
     schools_with_library: int; schools_with_ict: int
     schools_gps_verified: int; total_alerts: int; pending_feedback: int
+
+# ── SERVICE REQUESTS & SETTINGS ───────────────────────────────────
+class ServiceRequestCreate(BaseModel):
+    request_type: str
+    title: str
+    description: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+
+class ServiceRequestUpdate(BaseModel):
+    status: Optional[str] = None
+    admin_note: Optional[str] = None
+
+class ServiceRequestOut(BaseModel):
+    id: int
+    user_id: int
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    request_type: str
+    title: str
+    description: str
+    status: str
+    admin_note: Optional[str] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    resolved_by: Optional[int] = None
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+    class Config: from_attributes = True
+
+class SystemSettingOut(BaseModel):
+    key: str
+    value: str
+    label: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+class SystemSettingUpdate(BaseModel):
+    value: str
+
+# ── DATA ENTRY ────────────────────────────────────────────────────
+class FieldCollectionCreate(BaseModel):
+    school_id: int
+    collection_type: str
+    notes: Optional[str] = None
+
+class FieldCollectionOut(BaseModel):
+    id: int
+    school_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    collection_type: str
+    notes: Optional[str] = None
+    created_at: datetime
+    class Config: from_attributes = True
 
 TokenResponse.model_rebuild()

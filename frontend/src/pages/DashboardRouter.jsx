@@ -42,52 +42,66 @@ async function downloadReport(type) {
   }
 }
 
-// ── SYSTEM ADMIN DASHBOARD (technical only) ───────────────────────
+// ── SYSTEM ADMIN DASHBOARD ───────────────────────────────────────
 function AdminDashboard() {
   const navigate = useNavigate()
   const { data: health = {} } = useQuery({ queryKey:['system-health'], queryFn:()=>systemAPI.healthStats().then(r=>r.data) })
-  const { data: logs=[] } = useQuery({ queryKey:['admin-logs'], queryFn:()=>logsAPI.list({limit:12}).then(r=>r.data) })
-  const { data: users=[] } = useQuery({ queryKey:['admin-users'], queryFn:()=>usersAPI.list(0,200).then(r=>r.data) })
+  const { data: logs=[] } = useQuery({ queryKey:['admin-logs'], queryFn:()=>logsAPI.list({limit:8}).then(r=>r.data) })
+  const { data: n={} } = useQuery({ queryKey:['admin-national'], queryFn:()=>analyticsAPI.national().then(r=>r.data) })
+  const { data: risks=[] } = useQuery({ queryKey:['admin-risks'], queryFn:()=>analyticsAPI.riskScores({ limit: 8 }).then(r=>r.data) })
+
+  const prioritySchools = [...risks].sort((a, b) => b.risk_score - a.risk_score).slice(0, 8).map((r, i) => ({
+    ...r,
+    rank: i + 1,
+    equity: Math.max(0, 100 - r.risk_score),
+    priority: r.risk_score >= 60 ? 'high' : 'medium',
+  }))
 
   return (
     <div>
-      <PageHeader title="System Health"
-        sub="Technical administration — users, security, and platform status"
-        action={<Btn variant="outline" onClick={()=>navigate('/users')}>Manage Users</Btn>}/>
+      <PageHeader title="Administrator Overview"
+        sub="National education oversight and platform control"
+        action={<Btn variant="outline" onClick={()=>navigate('/registrations')}>Pending ({health.pending_registrations||0})</Btn>}/>
 
-      <Alert type="info">System admin manages accounts and platform health only. Education operations are handled by REB and district officers.</Alert>
-
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:22}}>
-        <StatCard label="API Status" value={health.api_status==='ok'?'Online':'Issue'} sub="ECRM backend" accent="green"/>
-        <StatCard label="Active Users" value={health.active_users||0} sub={`${health.inactive_users||0} inactive`} accent="blue"/>
-        <StatCard label="Audit Events" value={health.audit_events_24h||0} sub="Last 24 hours" accent="cyan"/>
-        <StatCard label="Failed Logins" value={health.failed_logins_24h||0} sub="Last 24 hours" accent={health.failed_logins_24h>0?'red':'green'}/>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:14,marginBottom:22}}>
+        <StatCard label="Schools" value={n.total_schools||health.total_schools||0} sub="National database" accent="blue" icon={School}/>
+        <StatCard label="Students" value={(n.total_students||0).toLocaleString()} sub="Enrolled" accent="cyan"/>
+        <StatCard label="Critical Schools" value={n.critical_schools||0} sub="Need intervention" accent="red" icon={AlertTriangle}/>
+        <StatCard label="Pending Registrations" value={health.pending_registrations||0} sub="Awaiting approval" accent="amber"/>
+        <StatCard label="Open Requests" value={health.open_service_requests||0} sub="User support" accent="purple"/>
+        <StatCard label="Failed Logins (24h)" value={health.failed_logins_24h||0} sub="Security" accent={health.failed_logins_24h>0?'red':'green'}/>
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-        <Card><CardHeader title="Users by Role"/><CardBody>
-          {Object.entries(health.users_by_role||{}).map(([role,count])=>(
-            <div key={role} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid var(--border)',fontSize:13}}>
-              <span style={{textTransform:'capitalize',color:'var(--text2)'}}>{role}</span>
-              <strong>{count}</strong>
-            </div>
-          ))}
-          <div style={{marginTop:14,fontSize:12,color:'var(--text3)'}}>
-            {users.length} accounts loaded · {health.total_schools||0} schools in database (read-only)
-          </div>
-        </CardBody></Card>
+      <QuickActions actions={[
+        { label:'Gap Analysis', icon:BarChart3, onClick:()=>navigate('/gap-analysis') },
+        { label:'GIS Map', icon:MapPin, onClick:()=>navigate('/gis') },
+        { label:'Manage Users', icon:Users, onClick:()=>navigate('/users') },
+        { label:'Service Requests', icon:MessageSquare, onClick:()=>navigate('/requests') },
+      ]}/>
 
-        <Card><CardHeader title="Recent Audit Activity" action={<Btn size="sm" variant="outline" onClick={()=>navigate('/logs')}>View all</Btn>}/><CardBody>
-          {(logs||[]).slice(0,8).map(l=>(
-            <div key={l.id} style={{display:'flex',gap:11,padding:'9px 0',borderBottom:'1px solid var(--bg)'}}>
-              <Badge status={l.action_type==='LOGIN_FAILED'?'critical':'reviewed'} label={l.action_type} dot={false}/>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12.5}}>{l.description}</div>
-                <div style={{fontSize:11,color:'var(--text3)'}}>{l.user_name||'System'} · {l.created_at?.replace('T',' ').slice(0,16)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr',gap:18,marginTop:18}}>
+        <Card><CardHeader title="Priority Schools" sub="Lowest equity — immediate attention"/>
+          <CardBody>
+            <Table columns={[
+              {key:'rank',label:'#',render:v=>`#${v}`},
+              {key:'school_name',label:'School',render:(v,row)=><div><strong>{v}</strong><div style={{fontSize:11,color:'var(--text2)'}}>{row.district}</div></div>},
+              {key:'equity',label:'Equity',render:v=><Badge status={v<50?'critical':v<70?'moderate':'good'} label={`${v}%`}/>},
+              {key:'priority',label:'Priority',render:v=><Badge status={v==='high'?'critical':'moderate'} label={v}/>},
+            ]} data={prioritySchools} empty="No risk data"/>
+          </CardBody>
+        </Card>
+
+        <Card><CardHeader title="Platform Health" action={<Btn size="sm" variant="outline" onClick={()=>navigate('/logs')}>Audit logs</Btn>}/>
+          <CardBody>
+            <div style={{fontSize:13,marginBottom:12}}>API <Badge status="good" label={health.api_status==='ok'?'Online':'Issue'}/> · {health.active_users||0} active users</div>
+            {(logs||[]).slice(0,6).map(l=>(
+              <div key={l.id} style={{display:'flex',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>
+                <Badge status={l.action_type==='LOGIN_FAILED'?'critical':'reviewed'} label={l.action_type} dot={false}/>
+                <span style={{flex:1}}>{l.description?.slice(0,60)}</span>
               </div>
-            </div>
-          ))}
-        </CardBody></Card>
+            ))}
+          </CardBody>
+        </Card>
       </div>
     </div>
   )
@@ -283,7 +297,7 @@ function DistrictDashboard() {
                   {[['Students',stu,'👩‍🎓'],['Teachers',tea,'👨‍🏫']].map(([l,v,ic])=>(
                     <div key={l} style={{background:'var(--bg2)',borderRadius:8,padding:'8px 10px'}}>
                       <div style={{fontSize:16}}>{ic}</div>
-                      <div style={{fontFamily:'Syne',fontSize:18,fontWeight:800}}>{v}</div>
+                      <div style={{fontFamily:'var(--font-heading)',fontSize:18,fontWeight:700}}>{v}</div>
                       <div style={{fontSize:10,color:'var(--text2)'}}>{l}</div>
                     </div>
                   ))}
@@ -334,6 +348,7 @@ function SchoolDashboard() {
     queryFn:()=>schoolsAPI.get(user.school_id).then(r=>r.data),
     enabled:hasSchool
   })
+
   const { data: teachers=[] } = useQuery({
     queryKey:['teachers',user?.school_id],
     queryFn:()=>import('../api/api').then(m=>m.teachersAPI.list({school_id:user?.school_id}).then(r=>r.data)),
@@ -388,6 +403,13 @@ function SchoolDashboard() {
       </div>
       <Tabs tabs={[{id:'overview',label:'Overview'},{id:'resources',label:'Resources'},{id:'teachers',label:'Teachers'},{id:'history',label:'History'},{id:'feedback',label:'Feedback'}]} active={tab} onChange={setTab}/>
       {tab==='overview'&&(<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
+        <Card><CardHeader title="Quick actions"/><CardBody>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <Btn variant="outline" onClick={()=>navigate('/data-entry')}>Data Entry — update counts & facilities</Btn>
+            <Btn variant="outline" onClick={()=>navigate('/schools')}>Edit full school profile</Btn>
+            <Btn variant="outline" onClick={()=>navigate('/teachers')}>Manage teacher roster</Btn>
+          </div>
+        </CardBody></Card>
         <Card><CardHeader title="Inventory"/><CardBody>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
             {[
@@ -402,7 +424,7 @@ function SchoolDashboard() {
                 <div style={{width:34,height:34,borderRadius:9,background:`${c}18`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8}}>
                   <Icon size={17} color={c}/>
                 </div>
-                <div style={{fontFamily:'Syne',fontSize:22,fontWeight:800,color:'var(--text)'}}>{v||0}</div>
+                <div style={{fontFamily:'var(--font-heading)',fontSize:22,fontWeight:700,color:'var(--text)'}}>{v||0}</div>
                 <div style={{fontSize:11,color:'var(--text2)',marginTop:2}}>{l}</div>
               </div>
             ))}
@@ -449,7 +471,7 @@ function SchoolDashboard() {
           {key:'status',label:'Status',render:v=><Badge status={v}/>},
         ]} data={teachers}/>
       </CardBody></Card>)}
-      {tab==='history'&&history.length>0&&(<Card><CardHeader title="Enrollment History"/><CardBody>
+      {tab==='history'&&(history.length>0?(<Card><CardHeader title="Enrollment History"/><CardBody>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={history}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
@@ -461,7 +483,9 @@ function SchoolDashboard() {
             <Line type="monotone" dataKey="students_girls" stroke="#F59E0B" name="Girls" strokeWidth={2} dot={{r:4}}/>
           </LineChart>
         </ResponsiveContainer>
-      </CardBody></Card>)}
+      </CardBody></Card>):(
+        <Card><CardBody><Empty title="No history yet" desc="Save enrollment counts on the Overview tab to start tracking."/></CardBody></Card>
+      ))}
       {tab==='feedback'&&(<Card><CardHeader title="Submitted Issues"/><CardBody>
         {feedback.length===0?<Empty title="No issues yet" desc="Reports you submit will appear here with status updates"/>:
           feedback.map(f=>(
@@ -485,19 +509,35 @@ function SchoolDashboard() {
 // ── ENUMERATOR DASHBOARD ──────────────────────────────────────────
 function EnumeratorDashboard() {
   const { user } = useAuth()
+  const { data: schoolTotal = 0 } = useQuery({
+    queryKey: ['enum-school-count', user?.district],
+    queryFn: () => schoolsAPI.count({ district: user.district }).then(r => r.data.total),
+    enabled: !!user?.district,
+  })
+  const { data: gis = {} } = useQuery({
+    queryKey: ['enum-gis'],
+    queryFn: () => analyticsAPI.gisSummary().then(r => r.data),
+    enabled: !!user?.district,
+  })
+  const unverified = Math.max(0, (gis.total_mapped || 0) - (gis.gps_verified || 0))
+
   return (
     <div>
-      <PageHeader title="Field Data Collection" sub="Submit and sync school data from the field"/>
-      <Alert type="info">Navigate to <strong>Schools</strong> to register new schools with GPS, or use the <strong>GIS Map</strong> to view existing locations.</Alert>
+      <PageHeader title="Field Data Collection" sub={`${user?.district} district — register schools and verify GPS`}/>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginBottom:22}}>
-        <StatCard label="Your District" value={user?.district} sub="Assigned area" accent="blue"/>
-        <StatCard label="Mode"          value="Online"          sub="Data syncing live" accent="green"/>
-        <StatCard label="Action"        value="Collect GPS"     sub="Use Schools page" accent="cyan"/>
+        <StatCard label="Schools in district" value={schoolTotal} sub="In your scope" accent="blue"/>
+        <StatCard label="GPS verified"        value={gis.gps_verified||0} sub={`of ${gis.total_mapped||0} mapped`} accent="green"/>
+        <StatCard label="Needs verification" value={unverified} sub="Open GIS map" accent="amber"/>
       </div>
-      <Card><CardHeader title="Quick Guide"/><CardBody>
-        {[['1. Register a school','Go to Schools → Register School. Fill all fields and capture GPS coordinates.','Step 1'],
-          ['2. Verify GPS on site','Open the school on the GIS Map and verify coordinates when physically at the school.','Step 2'],
-          ['3. Update locations','Use the Field Map to correct or add GPS for schools missing coordinates.','Step 3'],
+      <QuickActions actions={[
+        { label: 'Register school', sub: 'Add with GPS', icon: School, path: '/schools', color: '#2563EB' },
+        { label: 'Field map', sub: 'Verify coordinates', icon: MapPin, path: '/gis', color: '#06B6D4' },
+        { label: 'GPS report', sub: 'PDF export', icon: FileText, path: '/reports', color: '#8B5CF6' },
+      ]}/>
+      <Card><CardHeader title="Field workflow"/><CardBody>
+        {[['1. Register a school','Schools → Register School. Capture GPS when on site.','Step 1'],
+          ['2. Verify GPS','GIS Map → select school → verify coordinates.','Step 2'],
+          ['3. Export progress','Reports → GPS Coverage for your district.','Step 3'],
         ].map(([title,desc,step])=>(
           <div key={title} style={{display:'flex',gap:14,padding:'14px 0',borderBottom:'1px solid var(--bg)'}}>
             <span style={{fontSize:12,fontWeight:700,color:'var(--blue)',flexShrink:0,width:48}}>{step}</span>
@@ -512,30 +552,39 @@ function EnumeratorDashboard() {
 
 // ── COMMUNITY DASHBOARD ────────────────────────────────────────────
 function CommunityDashboard() {
+  const navigate = useNavigate()
+  const { data: feedback = [] } = useQuery({
+    queryKey: ['community-dashboard-fb'],
+    queryFn: () => feedbackAPI.list({ limit: 100 }).then(r => r.data),
+  })
+  const pending = feedback.filter(f => f.status === 'pending').length
+  const active = feedback.filter(f => ['reviewed', 'forwarded'].includes(f.status)).length
+  const done = feedback.filter(f => ['resolved', 'closed'].includes(f.status)).length
+
   return (
     <div>
-      <PageHeader title="Community Portal" sub="Report issues · Track progress · View schools"/>
-      <Alert type="info">Your reports are reviewed by the District Education Officer and help improve schools in your community.</Alert>
+      <PageHeader title="Community Portal" sub="Report issues and track responses from your district officer"/>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginBottom:22}}>
-        <div style={{background:'#fff',borderRadius:13,padding:22,border:'1px solid var(--border)',textAlign:'center',cursor:'pointer'}}
-          onClick={()=>window.location.href='/feedback'}>
-          <div style={{fontSize:40,marginBottom:10}}>📨</div>
-          <div style={{fontFamily:'Syne',fontSize:16,fontWeight:800,marginBottom:5}}>Submit a Report</div>
-          <div style={{fontSize:13,color:'var(--text2)'}}>Report an issue at your local school</div>
-        </div>
-        <div style={{background:'#fff',borderRadius:13,padding:22,border:'1px solid var(--border)',textAlign:'center',cursor:'pointer'}}
-          onClick={()=>window.location.href='/feedback'}>
-          <div style={{fontSize:40,marginBottom:10}}>🔍</div>
-          <div style={{fontFamily:'Syne',fontSize:16,fontWeight:800,marginBottom:5}}>Track Reports</div>
-          <div style={{fontSize:13,color:'var(--text2)'}}>See status of submitted reports</div>
-        </div>
-        <div style={{background:'#fff',borderRadius:13,padding:22,border:'1px solid var(--border)',textAlign:'center',cursor:'pointer'}}
-          onClick={()=>window.location.href='/gis'}>
-          <div style={{fontSize:40,marginBottom:10}}>🗺️</div>
-          <div style={{fontFamily:'Syne',fontSize:16,fontWeight:800,marginBottom:5}}>View School Map</div>
-          <div style={{fontSize:13,color:'var(--text2)'}}>See all schools on the GIS map</div>
-        </div>
+        <StatCard label="Pending review" value={pending} sub="Awaiting officer" accent="amber"/>
+        <StatCard label="In progress" value={active} sub="Being handled" accent="blue"/>
+        <StatCard label="Resolved" value={done} sub="Closed reports" accent="green"/>
       </div>
+      <QuickActions actions={[
+        { label: 'Submit report', sub: 'New issue', icon: MessageSquare, path: '/feedback', color: '#2563EB' },
+        { label: 'My reports', sub: 'Track status', icon: FileText, path: '/feedback', color: '#8B5CF6' },
+        { label: 'School map', sub: 'Find schools', icon: MapPin, path: '/gis', color: '#06B6D4' },
+      ]}/>
+      {feedback.length > 0 && (
+        <Card><CardHeader title="Recent reports"/><CardBody>
+          {feedback.slice(0, 5).map(f => (
+            <div key={f.id} style={{display:'flex',gap:12,padding:'10px 0',borderBottom:'1px solid var(--border)',cursor:'pointer'}}
+              onClick={() => navigate('/feedback')}>
+              <div style={{flex:1,fontSize:13,fontWeight:600}}>{f.description?.slice(0,100)}</div>
+              <Badge status={f.status}/>
+            </div>
+          ))}
+        </CardBody></Card>
+      )}
     </div>
   )
 }

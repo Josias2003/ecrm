@@ -1,17 +1,23 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { analyticsAPI } from '../api/api'
 import { useAuth } from '../store/auth'
-import { PageHeader, Card, CardHeader, CardBody, Table, Badge, StatCard } from '../components/UI'
+import { PageHeader, Card, CardHeader, CardBody, Table, Badge, StatCard, Alert } from '../components/UI'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { scoreColor } from '../utils/schoolMetrics'
 
 export default function GapAnalysisPage() {
   const { user } = useAuth()
-  const [wInfra, setWInfra] = useState(30)
-  const [wTeachers, setWTeachers] = useState(25)
-  const [wResources, setWResources] = useState(25)
-  const [wConn, setWConn] = useState(20)
+
+  const { data: weights } = useQuery({
+    queryKey: ['equity-weights'],
+    queryFn: () => analyticsAPI.equityWeights().then(r => r.data),
+  })
+
+  const wInfra = weights?.infra ?? 30
+  const wTeachers = weights?.teachers ?? 25
+  const wResources = weights?.resources ?? 25
+  const wConn = weights?.connectivity ?? 20
 
   const { data: dists = [] } = useQuery({
     queryKey: ['gap-districts'],
@@ -49,104 +55,76 @@ export default function GapAnalysisPage() {
   const nationalEquity = districtScores.length
     ? Math.round(districtScores.reduce((a, d) => a + d.equity, 0) / districtScores.length)
     : 0
-  const underserved = districtScores.filter(d => d.equity < 50).length
-  const gapSpread = districtScores.length
-    ? districtScores[districtScores.length - 1].equity - districtScores[0].equity
-    : 0
-  const criticalSchools = risks.filter(r => r.risk_score >= 60).length
 
-  const prioritySchools = [...risks]
-    .sort((a, b) => b.risk_score - a.risk_score)
-    .slice(0, 10)
-    .map((r, i) => ({
-      ...r,
-      rank: i + 1,
-      equity: Math.max(0, 100 - r.risk_score),
-    }))
+  const lowest = districtScores[0]
+  const highest = districtScores[districtScores.length - 1]
 
   return (
     <div>
-      <PageHeader
-        title="Gap Analysis & Equity Index"
-        sub="District disparities and priority schools — weighted from live data"
-      />
+      <PageHeader title="Gap Analysis" sub="District equity scores using platform-configured weights" />
+
+      <Alert type="info" style={{ marginBottom: 18 }}>
+        Weights from Platform Settings: Infrastructure {wInfra}% · Teachers {wTeachers}% · Resources {wResources}% · Connectivity {wConn}%
+        {user?.role === 'admin' && ' — change these under System → Platform settings.'}
+      </Alert>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22 }}>
-        <StatCard label="National Equity" value={`${nationalEquity}%`} sub="Weighted average" accent="blue" />
-        <StatCard label="Critical Schools" value={criticalSchools} sub="Risk score 60+" accent="red" />
-        <StatCard label="Underserved Districts" value={underserved} sub="Equity below 50%" accent="amber" />
-        <StatCard label="Equity Gap" value={`${gapSpread}%`} sub="Max − min district" accent="purple" />
+        <StatCard label="National Equity Index" value={`${nationalEquity}%`} sub="Weighted average" accent="blue" />
+        <StatCard label="Lowest District" value={lowest ? `${lowest.equity}%` : '—'} sub={lowest?.district || '—'} accent="red" />
+        <StatCard label="Highest District" value={highest ? `${highest.equity}%` : '—'} sub={highest?.district || '—'} accent="green" />
+        <StatCard label="Priority Schools" value={risks.filter(r => r.priority === 'high').length} sub="High intervention" accent="amber" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 18, marginBottom: 18 }}>
         <Card>
-          <CardHeader title="Index weights" />
+          <CardHeader title="District Equity Ranking" sub="Lower score = greater need" />
           <CardBody>
-            {[
-              ['Infrastructure', wInfra, setWInfra],
-              ['Teacher coverage', wTeachers, setWTeachers],
-              ['Learning materials', wResources, setWResources],
-              ['Connectivity', wConn, setWConn],
-            ].map(([label, val, set]) => (
-              <div key={label} style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-                  <span>{label}</span>
-                  <strong>{val}%</strong>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={50}
-                  value={val}
-                  onChange={e => set(+e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            ))}
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
-              Total weight: {wInfra + wTeachers + wResources + wConn}% (normalized in score)
-            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={districtScores.slice(0, 15)} layout="vertical" margin={{ left: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="district" width={90} tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ borderRadius: 10, fontSize: 12 }} />
+                <Bar dataKey="equity" fill="#2563EB" radius={[0, 4, 4, 0]} name="Equity %" />
+              </BarChart>
+            </ResponsiveContainer>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="District ranking" sub="Lowest equity first" />
+          <CardHeader title="Priority Schools" />
           <CardBody>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={districtScores.slice(0, 12)} layout="vertical" margin={{ left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="district" width={88} tick={{ fontSize: 10 }} />
-                <Tooltip />
-                <Bar dataKey="equity" fill="#2563EB" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Table
+              columns={[
+                { key: 'rank', label: '#', render: v => `#${v}` },
+                { key: 'school_name', label: 'School' },
+                { key: 'district', label: 'District' },
+                { key: 'equity', label: 'Score', render: v => (
+                  <span style={{ fontWeight: 700, color: scoreColor(v) }}>{v}%</span>
+                ) },
+                { key: 'priority', label: 'Priority', render: v => <Badge status={v === 'high' ? 'critical' : 'moderate'} label={v} /> },
+              ]}
+              data={risks.slice(0, 12)}
+              empty="No risk data for your scope"
+            />
           </CardBody>
         </Card>
       </div>
 
       <Card>
-        <CardHeader title="Priority schools" sub="Lowest equity / highest risk" />
+        <CardHeader title="District Breakdown" />
         <CardBody>
           <Table
             columns={[
-              { key: 'rank', label: '#' },
-              { key: 'name', label: 'School', render: v => <strong>{v}</strong> },
-              { key: 'district', label: 'District' },
-              {
-                key: 'equity',
-                label: 'Equity',
-                render: v => <span style={{ color: scoreColor(v), fontWeight: 700 }}>{v}%</span>,
-              },
-              { key: 'students', label: 'Students' },
-              {
-                key: 'risk_score',
-                label: 'Risk',
-                render: v => <Badge status={v >= 60 ? 'critical' : v >= 35 ? 'moderate' : 'good'} label={v} />,
-              },
+              { key: 'district', label: 'District', render: v => <strong>{v}</strong> },
+              { key: 'equity', label: 'Equity', render: v => <Badge status={v < 50 ? 'critical' : v < 70 ? 'moderate' : 'good'} label={`${v}%`} /> },
+              { key: 'infra', label: 'Infra' },
+              { key: 'teachers', label: 'Teachers' },
+              { key: 'resources', label: 'Resources' },
+              { key: 'conn', label: 'Power' },
             ]}
-            data={prioritySchools}
-            empty="No schools in scope"
+            data={districtScores}
+            empty="No district data"
           />
         </CardBody>
       </Card>

@@ -44,6 +44,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise err
     return user
 
+def role_str(user) -> str:
+    r = user.role
+    return r.value if hasattr(r, "value") else str(r)
+
 def require_roles(*roles):
     def checker(current_user=Depends(get_current_user)):
         if current_user.role not in roles:

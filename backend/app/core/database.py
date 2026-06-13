@@ -16,6 +16,12 @@ _COLUMN_PATCHES = [
     ("feedback", "forwarded_to_reb", "BOOLEAN DEFAULT 0"),
     ("feedback", "forwarded_at", "DATETIME"),
     ("chat_messages", "reply_to_id", "INTEGER"),
+    ("users", "phone", "VARCHAR(30)"),
+    ("users", "organization", "VARCHAR(150)"),
+    ("users", "account_status", "VARCHAR(20) DEFAULT 'active'"),
+    ("users", "rejection_reason", "TEXT"),
+    ("users", "approved_by", "INTEGER"),
+    ("users", "approved_at", "DATETIME"),
 ]
 
 

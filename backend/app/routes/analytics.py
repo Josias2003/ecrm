@@ -8,13 +8,14 @@ from app.core.security import get_current_user, require_roles
 from app.models.models import School, Teacher, ResourceAlert, Feedback, EnrollmentHistory, StatusEnum, FeedbackStatusEnum, User, RoleEnum
 from app.services.school_scope import scoped_schools_query
 from app.services.school_metrics import resource_rows_for_school
+from app.services.system_settings import get_equity_weights
 from app.schemas.schemas import NationalStats, DistrictStats
 
 analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @analytics_router.get("/national", response_model=NationalStats)
 def national_stats(db: Session = Depends(get_db),
-                   cu=Depends(require_roles("reb"))):
+                   cu=Depends(require_roles("reb", "admin"))):
     ss = db.query(School).all()
     return NationalStats(
         total_schools=len(ss),
@@ -32,26 +33,32 @@ def national_stats(db: Session = Depends(get_db),
         pending_feedback=db.query(Feedback).filter(Feedback.status == FeedbackStatusEnum.pending).count(),
     )
 
+@analytics_router.get("/equity-weights")
+def equity_weights(db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    return get_equity_weights(db)
+
 @analytics_router.get("/districts", response_model=List[DistrictStats])
 def district_stats(db: Session = Depends(get_db), cu=Depends(get_current_user)):
+    ss = scoped_schools_query(db, cu).all()
+    districts = sorted({s.district for s in ss if s.district})
     officers = {
         u.district: u.full_name
         for u in db.query(User).filter(User.role == RoleEnum.district, User.is_active == True).all()
     }
     results = []
-    for (dist,) in db.query(School.district).distinct():
-        ss = db.query(School).filter(School.district == dist).all()
-        stu = sum((s.students_boys or 0)+(s.students_girls or 0) for s in ss)
-        tea = sum((s.teachers_male or 0)+(s.teachers_female or 0) for s in ss)
+    for dist in districts:
+        ds = [s for s in ss if s.district == dist]
+        stu = sum((s.students_boys or 0)+(s.students_girls or 0) for s in ds)
+        tea = sum((s.teachers_male or 0)+(s.teachers_female or 0) for s in ds)
         officer = officers.get(dist)
         results.append(DistrictStats(
-            district=dist, total_schools=len(ss), total_students=stu, total_teachers=tea,
-            critical_schools=sum(1 for s in ss if s.status == StatusEnum.critical),
-            moderate_schools=sum(1 for s in ss if s.status == StatusEnum.moderate),
-            good_schools=sum(1 for s in ss if s.status == StatusEnum.good),
+            district=dist, total_schools=len(ds), total_students=stu, total_teachers=tea,
+            critical_schools=sum(1 for s in ds if s.status == StatusEnum.critical),
+            moderate_schools=sum(1 for s in ds if s.status == StatusEnum.moderate),
+            good_schools=sum(1 for s in ds if s.status == StatusEnum.good),
             avg_pupil_teacher_ratio=round(stu/tea, 2) if tea else 0,
-            schools_with_water=sum(1 for s in ss if s.has_water),
-            schools_with_electricity=sum(1 for s in ss if s.has_electricity),
+            schools_with_water=sum(1 for s in ds if s.has_water),
+            schools_with_electricity=sum(1 for s in ds if s.has_electricity),
             district_officer=officer,
             officer_assigned=bool(officer),
         ))
@@ -165,7 +172,8 @@ def enrollment_trends(school_id: Optional[int]=Query(None),
 
 @analytics_router.get("/gis-summary")
 def gis_summary(db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    ss = db.query(School).filter(School.latitude.isnot(None)).all()
+    all_schools = scoped_schools_query(db, cu).all()
+    ss = [s for s in all_schools if s.latitude is not None]
     by_district = {}
     for s in ss:
         dist = s.district
@@ -179,7 +187,7 @@ def gis_summary(db: Session = Depends(get_db), cu=Depends(get_current_user)):
             "critical": sum(1 for s in ss if s.status == StatusEnum.critical),
         },
         "by_district": by_district,
-        "coverage_pct": round(len(ss) / max(db.query(School).count(), 1) * 100, 1),
+        "coverage_pct": round(len(ss) / max(len(all_schools), 1) * 100, 1),
     }
 
 

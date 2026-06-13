@@ -9,6 +9,7 @@ from app.data.rwanda_districts import DISTRICT_NAMES
 from app.models.models import User, School, RoleEnum
 
 NATIONAL = "National"
+SELF_REGISTER_ROLES = {RoleEnum.reb, RoleEnum.district, RoleEnum.school, RoleEnum.enumerator, RoleEnum.community}
 
 
 def _role_value(role) -> str:

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './store/auth'
 import { CSS, PageLoad } from './components/UI'
+import SidebarNav from './components/SidebarNav'
+import TopbarSecondaryNav from './components/TopbarSecondaryNav'
+import { getNavForRole, getNavGroupContext, getPageBreadcrumb } from './config/navConfig'
 import {
   Search,
   Bell,
@@ -10,24 +13,7 @@ import {
   PanelLeft,
   Settings,
   LogOut,
-  LayoutDashboard,
-  School,
-  Map as MapIcon,
-  UserRound,
-  MessageSquare,
-  BellRing,
-  BarChart3,
-  Users as UsersIcon,
-  ClipboardList,
-  ClipboardPen,
-  Flag,
-  FileText,
-  ScrollText,
-  MessagesSquare,
   User,
-  Package,
-  MapPinned,
-  Scale,
 } from 'lucide-react'
 import LandingPage from './pages/LandingPage'
 import GISMapPage from './pages/GISMapPage'
@@ -48,6 +34,9 @@ import DataEntryPage from './pages/DataEntryPage'
 import NotificationsPage from './pages/NotificationsPage'
 import LogsPage from './pages/LogsPage'
 import ChatPage from './pages/ChatPage'
+import RegistrationsPage from './pages/RegistrationsPage'
+import ServiceRequestsPage from './pages/ServiceRequestsPage'
+import AdminSettingsPage from './pages/AdminSettingsPage'
 import { useTheme } from './store/theme'
 
 const ROLE_LABELS = {
@@ -56,87 +45,24 @@ const ROLE_LABELS = {
 }
 
 const ROUTE_ROLES = {
-  '/schools':   ['reb','district','enumerator','school'],
-  '/gis':       ['reb','district','enumerator','community','school'],
-  '/teachers':  ['reb','district','school'],
-  '/feedback':  ['reb','district','school','community'],
-  '/alerts':    ['reb','district','school','enumerator'],
-  '/analytics': ['reb','district'],
-  '/resources': ['reb','district','school'],
-  '/districts': ['reb','district'],
-  '/gap-analysis': ['reb','district'],
+  '/schools':   ['admin', 'reb', 'district', 'enumerator', 'school'],
+  '/gis':       ['admin', 'reb', 'district', 'enumerator', 'community', 'school'],
+  '/teachers':  ['admin', 'reb', 'district', 'school'],
+  '/feedback':  ['reb', 'district', 'school', 'community'],
+  '/alerts':    ['reb', 'district', 'enumerator'],
+  '/analytics': ['admin', 'reb', 'district'],
+  '/resources': ['admin', 'reb', 'district', 'school'],
+  '/districts': ['admin', 'reb', 'district'],
+  '/gap-analysis': ['admin', 'reb', 'district'],
   '/users':     ['admin'],
+  '/registrations': ['admin'],
+  '/requests':  ['admin', 'reb', 'district', 'school', 'enumerator', 'community'],
+  '/admin-settings': ['admin'],
   '/logs':      ['admin'],
-  '/reports':   ['reb','district','school','enumerator','community'],
-  '/chat':      ['reb','district','school','enumerator'],
+  '/chat':      ['admin', 'reb', 'district', 'school', 'enumerator'],
   '/data-entry': ['school'],
-  '/notifications': ['reb','district','school'],
-}
-
-const BASE_NAV = {
-  admin:     [
-    { path:'/dashboard', label:'System Health', icon:LayoutDashboard },
-    { path:'/users',     label:'Users',        icon:UsersIcon },
-  ],
-  reb:       [
-    { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
-    { path:'/schools',   label:'Schools',      icon:School },
-    { path:'/gis',       label:'GIS Map',      icon:MapIcon, highlight:true },
-    { path:'/teachers',  label:'Teachers',     icon:UserRound },
-    { path:'/resources', label:'Resources',    icon:Package },
-    { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
-    { path:'/alerts',    label:'Alerts',       icon:BellRing },
-    { path:'/reports',   label:'Reports',      icon:FileText },
-    { path:'/gap-analysis', label:'Gap Analysis', icon:Scale },
-    { path:'/districts', label:'Districts',    icon:MapPinned },
-  ],
-  district:  [
-    { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
-    { path:'/schools',   label:'My Schools',   icon:School },
-    { path:'/gis',       label:'District Map', icon:MapIcon, highlight:true },
-    { path:'/teachers',  label:'Teachers',     icon:UserRound },
-    { path:'/resources', label:'Resources',    icon:Package },
-    { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
-    { path:'/alerts',    label:'Alerts',       icon:BellRing },
-    { path:'/reports',   label:'Reports',      icon:FileText },
-    { path:'/gap-analysis', label:'Gap Analysis', icon:Scale },
-    { path:'/districts', label:'Districts',    icon:MapPinned },
-  ],
-  school:    [
-    { path:'/dashboard', label:'Dashboard',    icon:LayoutDashboard },
-    { path:'/schools',   label:'My School',    icon:School },
-    { path:'/teachers',  label:'Teachers',     icon:UserRound },
-    { path:'/resources', label:'Resources',    icon:Package },
-    { path:'/feedback',  label:'Feedback',     icon:MessageSquare },
-    { path:'/data-entry', label:'Data Entry', icon:ClipboardPen },
-    { path:'/notifications', label:'Notifications', icon:Bell },
-  ],
-  enumerator:[
-    { path:'/dashboard', label:'Collect Data', icon:ClipboardList },
-    { path:'/schools',   label:'Schools',      icon:School },
-    { path:'/gis',       label:'Field Map',    icon:MapIcon, highlight:true },
-  ],
-  community: [
-    { path:'/dashboard', label:'Report Issue', icon:Flag },
-    { path:'/feedback',  label:'My Reports',   icon:Search },
-    { path:'/gis',       label:'School Map',   icon:MapIcon, highlight:true },
-  ],
-}
-
-const EXTRA_NAV = {
-  reports: { path:'/reports', label:'Reports', icon:FileText },
-  logs:    { path:'/logs', label:'Audit Logs', icon:ScrollText },
-  chat:    { path:'/chat', label:'Team Chat', icon:MessagesSquare },
-}
-
-function navForRole(role) {
-  const base = [...(BASE_NAV[role] || BASE_NAV.community)]
-  const extras = []
-  if (['enumerator','community'].includes(role)) extras.push(EXTRA_NAV.reports)
-  if (role === 'admin') extras.push(EXTRA_NAV.logs)
-  if (['school'].includes(role)) extras.push(EXTRA_NAV.reports)
-  if (['reb','district','school','enumerator'].includes(role)) extras.push(EXTRA_NAV.chat)
-  return [...base, ...extras]
+  '/notifications': ['school'],
+  '/reports':   ['admin', 'reb', 'district', 'school', 'enumerator', 'community'],
 }
 
 function ProtectedRoute({ path, user, children }) {
@@ -151,7 +77,7 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
-  const nav = navForRole(user.role)
+  const nav = getNavForRole(user.role, { pendingAlerts })
   const initials = user.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
 
   const handleLogout = () => {
@@ -176,10 +102,10 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
         <div style={{ width:36, height:36, borderRadius:10, flexShrink:0,
           background:'linear-gradient(135deg,#2563EB,#06B6D4)',
           display:'flex', alignItems:'center', justifyContent:'center',
-          fontFamily:'Syne', fontSize:14, fontWeight:800, color:'#fff' }}>EC</div>
+          fontSize:14, fontWeight:700, color:'#fff' }}>EC</div>
         {!collapsed && (
           <div style={{ minWidth:0 }}>
-            <div style={{ fontFamily:'Syne', fontSize:15, fontWeight:800, color:'#fff', letterSpacing:.3 }}>ECRM</div>
+            <div style={{ fontFamily:'var(--font-heading)', fontSize:15, fontWeight:700, color:'#fff', letterSpacing:.3 }}>ECRM</div>
             <div style={{ fontSize:10, color:'rgba(255,255,255,.38)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               Rwanda · Resource Mapping
             </div>
@@ -193,54 +119,7 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
           <div style={{ fontSize:10, color:'rgba(255,255,255,.28)', padding:'6px 10px 8px',
             letterSpacing:1.2, textTransform:'uppercase', fontWeight:600 }}>Menu</div>
         )}
-        {nav.map(item => (
-          <NavLink key={item.path} to={item.path}
-            style={({ isActive }) => ({
-              display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
-              borderRadius:10, marginBottom:2, fontSize:13, fontWeight:500,
-              color: isActive ? '#F8FAFC' : 'rgba(148,163,184,.92)',
-              background: isActive ? 'rgba(59,130,246,0.08)' : 'transparent',
-              borderLeft: isActive ? '3px solid #3B82F6' : '3px solid transparent',
-              textDecoration:'none', transition:'all .15s', position:'relative',
-            })}>
-            {({ isActive }) => {
-              const IconComp = item.icon
-              return (
-                <>
-                  {isActive && null}
-                  <span
-                    style={{
-                      width:20,
-                      textAlign:'center',
-                      flexShrink:0,
-                      display:'flex',
-                      alignItems:'center',
-                      justifyContent:'center',
-                      color: isActive ? '#F8FAFC' : 'rgba(148,163,184,.92)',
-                    }}
-                  >
-                    {typeof IconComp === 'string' ? (
-                      IconComp
-                    ) : (
-                      <IconComp size={20} />
-                    )}
-                  </span>
-                  {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
-                  {!collapsed && item.path==='/alerts' && pendingAlerts > 0 && (
-                    <span style={{ background:'var(--red)', color:'#fff', fontSize:10,
-                      fontWeight:700, padding:'2px 6px', borderRadius:20,
-                      minWidth:18, textAlign:'center' }}>{pendingAlerts}</span>
-                  )}
-                  {item.highlight && !isActive && !collapsed && (
-                    <span style={{ background:'rgba(6,182,212,.2)', color:'#06B6D4',
-                      fontSize:9, fontWeight:700, padding:'1px 5px',
-                      borderRadius:4, letterSpacing:.3 }}>GIS</span>
-                  )}
-                </>
-              )
-            }}
-          </NavLink>
-        ))}
+        <SidebarNav items={nav} collapsed={collapsed} />
       </nav>
 
       {/* Collapse + user — bottom */}
@@ -333,17 +212,29 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
   )
 }
 
-function Topbar({ pendingAlerts }) {
+function Topbar({ pendingAlerts, user }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
+  const navOpts = { pendingAlerts }
+  const breadcrumb = getPageBreadcrumb(user?.role, location.pathname, navOpts)
+  const groupCtx = getNavGroupContext(user?.role, location.pathname, navOpts)
+
   const pageName = {
     '/dashboard':'Dashboard', '/schools':'Schools', '/gis':'GIS Map — Geospatial View',
     '/teachers':'Teacher Management', '/feedback':'Feedback & Reports',
     '/alerts':'Resource Alerts', '/analytics':'Analytics', '/users':'User Management',
     '/profile':'Profile', '/settings':'Settings', '/reports':'Reports',
     '/logs':'Audit Logs', '/chat':'Team Chat',
+    '/registrations':'Pending Registrations', '/requests':'Service Requests',
+    '/admin-settings':'System Settings', '/gap-analysis':'Gap Analysis',
+    '/resources':'Resource inventory', '/districts':'Districts',
+    '/data-entry':'Data Entry', '/notifications':'Alerts & updates',
   }[location.pathname] || 'ECRM'
+
+  const title = breadcrumb?.group
+    ? `${breadcrumb.root} · ${breadcrumb.group}`
+    : breadcrumb?.root || pageName
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -362,27 +253,24 @@ function Topbar({ pendingAlerts }) {
   }
 
   return (
-    <header
-      style={{
-        height:62,
-        background:'var(--topbar)',
-        borderBottom:'1px solid var(--border)',
-        display:'grid',
-        gridTemplateColumns:'minmax(220px,1fr) 400px auto',
-        alignItems:'center',
-        padding:'0 24px',
-        gap:14,
-        flexShrink:0,
-        position:'sticky',
-        top:0,
-        zIndex:50,
-      }}
-    >
-      <div style={{minWidth:0}}>
-        <h1 style={{ fontFamily:'Inter', fontSize:18, fontWeight:700, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-          {pageName}
-        </h1>
-      </div>
+    <div style={{ position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+      <header
+        style={{
+          height: 62,
+          background: 'var(--topbar)',
+          borderBottom: groupCtx ? 'none' : '1px solid var(--border)',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(220px,1fr) 400px auto',
+          alignItems: 'center',
+          padding: '0 24px',
+          gap: 14,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {title}
+          </h1>
+        </div>
 
       <form onSubmit={submitSearch} style={{ display:'flex', alignItems:'center' }}>
         <div
@@ -428,7 +316,7 @@ function Topbar({ pendingAlerts }) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12 }}>
         <button
           aria-label="Notifications"
-          onClick={()=>navigate('/alerts')}
+          onClick={() => navigate(user?.role === 'school' ? '/notifications' : '/alerts')}
           style={{
             width:42,
             height:42,
@@ -464,6 +352,13 @@ function Topbar({ pendingAlerts }) {
         </button>
       </div>
     </header>
+      {groupCtx && (
+        <TopbarSecondaryNav
+          groupLabel={groupCtx.group.label}
+          items={groupCtx.children}
+        />
+      )}
+    </div>
   )
 }
 
@@ -483,11 +378,14 @@ function AppShell({ user }) {
   useEffect(() => {
     if (!['reb','district','school'].includes(user?.role)) return
     import('./api/api').then(({ alertsAPI }) => {
-      alertsAPI.list({ resolved: false }).then(r => {
+      const params = { resolved: false }
+      if (user?.role === 'school' && user.school_id) params.school_id = user.school_id
+      if (user?.role === 'district' && user.district) params.district = user.district
+      alertsAPI.list(params).then(r => {
         setPendingAlerts(r.data?.length || 0)
       }).catch(() => {})
     })
-  }, [user?.role])
+  }, [user?.role, user?.school_id, user?.district])
 
   useEffect(() => {
     try { localStorage.setItem('ecrm-sidebar-collapsed', collapsed ? '1' : '0') } catch { /* ignore */ }
@@ -502,7 +400,7 @@ function AppShell({ user }) {
       <Sidebar user={user} pendingAlerts={pendingAlerts} collapsed={collapsed} onToggle={toggleSidebar} />
       <div style={{ marginLeft:sidebarWidth, flex:1, display:'flex',
         flexDirection:'column', minHeight:'100vh', overflow:'hidden' }}>
-        <Topbar pendingAlerts={pendingAlerts} />
+        <Topbar pendingAlerts={pendingAlerts} user={user} />
         <main style={{ flex:1, padding:'24px 24px', overflowY:'auto' }}>
           <div style={{ maxWidth:1400, margin:'0 auto' }}>
             <Routes>
@@ -514,6 +412,9 @@ function AppShell({ user }) {
               <Route path="/alerts"    element={<ProtectedRoute path="/alerts" user={user}><AlertsPage /></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute path="/analytics" user={user}><AnalyticsPage /></ProtectedRoute>} />
               <Route path="/users"     element={<ProtectedRoute path="/users" user={user}><UsersPage /></ProtectedRoute>} />
+              <Route path="/registrations" element={<ProtectedRoute path="/registrations" user={user}><RegistrationsPage /></ProtectedRoute>} />
+              <Route path="/requests" element={<ProtectedRoute path="/requests" user={user}><ServiceRequestsPage /></ProtectedRoute>} />
+              <Route path="/admin-settings" element={<ProtectedRoute path="/admin-settings" user={user}><AdminSettingsPage /></ProtectedRoute>} />
               <Route path="/profile"   element={<ProfilePage />} />
               <Route path="/settings"  element={<SettingsPage />} />
               <Route path="/reports"   element={<ProtectedRoute path="/reports" user={user}><ReportsPage /></ProtectedRoute>} />

@@ -12,6 +12,6 @@ const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30000, retr
 ReactDOM.createRoot(document.getElementById('root')).render(
   <QueryClientProvider client={qc}>
     <App />
-    <Toaster position="top-right" toastOptions={{ style:{ fontFamily:'Inter', fontSize:13, borderRadius:10 } }}/>
+    <Toaster position="top-right" toastOptions={{ style:{ fontFamily:'var(--font-body)', fontSize:13, borderRadius:10 } }}/>
   </QueryClientProvider>
 )

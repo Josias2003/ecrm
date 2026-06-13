@@ -14,7 +14,7 @@ export default function SchoolEmptyState({ title = 'No school assigned', message
       }}>
         <School size={36} color="var(--text3)" strokeWidth={1.5} />
       </div>
-      <h2 style={{ fontFamily: 'Syne', fontSize: 22, fontWeight: 800, margin: '0 0 10px', color: 'var(--text)' }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 10px', color: 'var(--text)' }}>
         {title}
       </h2>
       <p style={{ fontSize: 14, color: 'var(--text2)', maxWidth: 400, lineHeight: 1.6, margin: '0 0 20px' }}>

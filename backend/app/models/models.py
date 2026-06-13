@@ -18,6 +18,16 @@ class FeedbackStatusEnum(str, enum.Enum):
 class AlertLevelEnum(str, enum.Enum):
     info="info"; warning="warning"; critical="critical"
 
+class AccountStatusEnum(str, enum.Enum):
+    pending="pending"; active="active"; rejected="rejected"; inactive="inactive"
+
+class RequestStatusEnum(str, enum.Enum):
+    pending="pending"; approved="approved"; rejected="rejected"; resolved="resolved"
+
+class ReportAssignmentStatusEnum(str, enum.Enum):
+    pending="pending"; in_progress="in_progress"; submitted="submitted"
+    accepted="accepted"; rejected="rejected"
+
 class School(Base):
     __tablename__ = "schools"
     id               = Column(Integer, primary_key=True, index=True)
@@ -59,6 +69,7 @@ class School(Base):
     feedback       = relationship("Feedback", back_populates="school", cascade="all, delete-orphan")
     alerts         = relationship("ResourceAlert", back_populates="school", cascade="all, delete-orphan")
     enrollments    = relationship("EnrollmentHistory", back_populates="school", cascade="all, delete-orphan")
+    collections    = relationship("FieldCollection", back_populates="school", cascade="all, delete-orphan")
 
     __table_args__ = (Index('idx_district_status', 'district', 'status'),)
 
@@ -71,6 +82,12 @@ class User(Base):
     role            = Column(SAEnum(RoleEnum), nullable=False, index=True)
     district        = Column(String(100), nullable=True, index=True)
     school_id       = Column(Integer, ForeignKey("schools.id"), nullable=True)
+    phone           = Column(String(30), nullable=True)
+    organization    = Column(String(150), nullable=True)
+    account_status  = Column(SAEnum(AccountStatusEnum), default=AccountStatusEnum.active, index=True)
+    rejection_reason = Column(Text, nullable=True)
+    approved_by     = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at     = Column(DateTime(timezone=True), nullable=True)
     is_active       = Column(Boolean, default=True, index=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
@@ -158,6 +175,17 @@ class EnrollmentHistory(Base):
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
     school         = relationship("School", back_populates="enrollments")
 
+class FieldCollection(Base):
+    __tablename__ = "field_collections"
+    id              = Column(Integer, primary_key=True, index=True)
+    school_id       = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    user_id         = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    collection_type = Column(String(40), nullable=False, index=True)
+    notes           = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    school          = relationship("School", back_populates="collections")
+    user            = relationship("User")
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id          = Column(Integer, primary_key=True, index=True)
@@ -201,3 +229,55 @@ class ChatMessage(Base):
     room        = relationship("ChatRoom", back_populates="messages")
     author      = relationship("User")
     reply_to    = relationship("ChatMessage", remote_side=[id], foreign_keys=[reply_to_id])
+
+class ServiceRequest(Base):
+    __tablename__ = "service_requests"
+    id           = Column(Integer, primary_key=True, index=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    request_type = Column(String(40), nullable=False, index=True)
+    title        = Column(String(200), nullable=False)
+    description  = Column(Text, nullable=False)
+    status       = Column(SAEnum(RequestStatusEnum), default=RequestStatusEnum.pending, index=True)
+    admin_note   = Column(Text, nullable=True)
+    entity_type  = Column(String(50), nullable=True)
+    entity_id    = Column(Integer, nullable=True)
+    resolved_by  = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_at  = Column(DateTime(timezone=True), nullable=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
+    user         = relationship("User", foreign_keys=[user_id])
+
+class ReportAssignment(Base):
+    __tablename__ = "report_assignments"
+    id              = Column(Integer, primary_key=True, index=True)
+    report_type     = Column(String(60), nullable=False, index=True)
+    title           = Column(String(200), nullable=False)
+    instructions    = Column(Text, nullable=True)
+    requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_to_id  = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    district        = Column(String(100), nullable=True, index=True)
+    school_id       = Column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
+    due_date        = Column(DateTime(timezone=True), nullable=True)
+    status          = Column(
+        SAEnum(ReportAssignmentStatusEnum),
+        default=ReportAssignmentStatusEnum.pending,
+        index=True,
+    )
+    response_note   = Column(Text, nullable=True)
+    reviewer_note   = Column(Text, nullable=True)
+    submitted_at    = Column(DateTime(timezone=True), nullable=True)
+    resolved_at     = Column(DateTime(timezone=True), nullable=True)
+    resolved_by_id  = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+    requested_by    = relationship("User", foreign_keys=[requested_by_id])
+    assigned_to     = relationship("User", foreign_keys=[assigned_to_id])
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+    id          = Column(Integer, primary_key=True, index=True)
+    key         = Column(String(80), unique=True, nullable=False, index=True)
+    value       = Column(Text, nullable=False)
+    label       = Column(String(200), nullable=True)
+    updated_by  = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at  = Column(DateTime(timezone=True), onupdate=func.now())

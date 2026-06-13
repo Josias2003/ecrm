@@ -12,41 +12,40 @@ export default function NotificationsPage() {
   const navigate = useNavigate()
 
   const { data: alerts = [] } = useQuery({
-    queryKey: ['notif-alerts', user?.school_id, user?.district, user?.role],
+    queryKey: ['notif-alerts', user?.school_id],
     queryFn: () => alertsAPI.list({
-      school_id: user?.role === 'school' ? user.school_id : undefined,
-      district: user?.role === 'district' ? user.district : undefined,
+      school_id: user.school_id,
       resolved: false,
       limit: 50,
     }).then(r => r.data),
-    enabled: ['school', 'district', 'reb'].includes(user?.role),
+    enabled: user?.role === 'school' && !!user?.school_id,
   })
 
   const { data: feedback = [] } = useQuery({
     queryKey: ['notif-feedback', user?.school_id],
-    queryFn: () => feedbackAPI.list({ school_id: user?.school_id, limit: 30 }).then(r => r.data),
+    queryFn: () => feedbackAPI.list({ school_id: user.school_id, limit: 30 }).then(r => r.data),
     enabled: user?.role === 'school' && !!user?.school_id,
   })
 
   if (user?.role === 'school' && !user?.school_id) {
     return (
       <div>
-        <PageHeader title="Notifications" sub="All caught up!" />
+        <PageHeader title="Alerts & updates" sub="Resource alerts and feedback for your school" />
         <SchoolEmptyState />
       </div>
     )
   }
 
-  const recentFb = feedback.filter(f => ['reviewed', 'resolved', 'closed'].includes(f.status)).slice(0, 10)
+  const recentFb = feedback.filter(f => ['reviewed', 'resolved', 'closed', 'pending'].includes(f.status)).slice(0, 10)
   const items = [
     ...alerts.map(a => ({
       id: `alert-${a.id}`,
       type: 'alert',
       title: a.alert_type?.replace(/_/g, ' ') || 'Resource alert',
-      sub: a.school_name || a.description?.slice(0, 80),
+      sub: a.description?.slice(0, 80) || a.school_name,
       date: a.created_at?.slice(0, 10),
       level: a.level,
-      path: '/alerts',
+      path: '/resources',
     })),
     ...recentFb.map(f => ({
       id: `fb-${f.id}`,
@@ -62,8 +61,8 @@ export default function NotificationsPage() {
   return (
     <div>
       <PageHeader
-        title="Notifications"
-        sub={items.length ? `${items.length} notification${items.length > 1 ? 's' : ''}` : 'All caught up!'}
+        title="Alerts & updates"
+        sub="Resource alerts and feedback status for your school"
       />
 
       <Card>
@@ -71,7 +70,7 @@ export default function NotificationsPage() {
           {items.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 60 }}>
               <Bell size={48} color="var(--text3)" strokeWidth={1.2} style={{ marginBottom: 16 }} />
-              <Empty title="No notifications" desc="You're all caught up!" />
+              <Empty title="No alerts or updates" desc="You're all caught up." />
             </div>
           ) : (
             items.map(item => (

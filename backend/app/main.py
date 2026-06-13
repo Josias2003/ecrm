@@ -10,7 +10,8 @@ from app.routes import (
     auth_router, users_router, schools_router,
     teachers_router, feedback_router, alerts_router,
     analytics_router, logs_router, enrollment_router,
-    reports_router, chat_router, system_router, meta_router,
+    reports_router, report_assignments_router, chat_router, system_router, meta_router,
+    settings_router, requests_router, data_entry_router,
 )
 
 limiter = Limiter(key_func=get_remote_address)
@@ -51,7 +52,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 for router in [auth_router, users_router, schools_router, teachers_router,
                feedback_router, alerts_router, analytics_router,
-               logs_router, enrollment_router, reports_router, chat_router, system_router, meta_router]:
+               logs_router, enrollment_router, reports_router, report_assignments_router,
+               chat_router, system_router, meta_router, settings_router, requests_router,
+               data_entry_router]:
     app.include_router(router)
 
 @app.get("/api/health")

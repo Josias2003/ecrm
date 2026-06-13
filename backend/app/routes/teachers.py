@@ -23,10 +23,11 @@ def _assert_teacher_scope(cu, school: School):
         raise HTTPException(403, "You can only manage teachers in your district")
 
 def _teachers_query(db, cu, school_id=None, district=None, status=None):
-    if cu.role in ("admin", "enumerator", "community"):
+    role = cu.role.value if hasattr(cu.role, "value") else str(cu.role)
+    if role in ("enumerator", "community"):
         raise HTTPException(403, "Your role cannot access teacher records")
     q = db.query(Teacher).join(School)
-    if cu.role == "school" and cu.school_id:
+    if role == "school" and cu.school_id:
         q = q.filter(Teacher.school_id == cu.school_id)
     if cu.role == "district" and cu.district:
         q = q.filter(School.district == cu.district)
@@ -56,11 +57,12 @@ def list_teachers(school_id: Optional[int]=Query(None),
 
 @teachers_router.post("/", response_model=TeacherOut, status_code=201)
 def create_teacher(payload: TeacherCreate, request: Request, db: Session = Depends(get_db),
-                   cu=Depends(require_roles("district","school"))):
+                   cu=Depends(require_roles("admin", "district", "school"))):
     school = _teacher_school(db, payload.school_id)
     if not school:
         raise HTTPException(404, "School not found")
-    _assert_teacher_scope(cu, school)
+    if cu.role not in ("admin",):
+        _assert_teacher_scope(cu, school)
     t = Teacher(**payload.model_dump())
     db.add(t)
     ip = get_client_ip(request)
@@ -71,12 +73,13 @@ def create_teacher(payload: TeacherCreate, request: Request, db: Session = Depen
 
 @teachers_router.patch("/{tid}", response_model=TeacherOut)
 def update_teacher(tid: int, payload: TeacherUpdate, request: Request, db: Session = Depends(get_db),
-                   cu=Depends(require_roles("district","school"))):
+                   cu=Depends(require_roles("admin", "district", "school"))):
     row = db.query(Teacher, School).join(School).filter(Teacher.id == tid).first()
     if not row:
         raise HTTPException(404, "Teacher not found")
     t, school = row
-    _assert_teacher_scope(cu, school)
+    if cu.role not in ("admin",):
+        _assert_teacher_scope(cu, school)
     for k, v in payload.model_dump(exclude_none=True).items():
         setattr(t, k, v)
     ip = get_client_ip(request)
@@ -87,12 +90,12 @@ def update_teacher(tid: int, payload: TeacherUpdate, request: Request, db: Sessi
 
 @teachers_router.delete("/{tid}")
 def delete_teacher(tid: int, request: Request, db: Session = Depends(get_db),
-                   cu=Depends(require_roles("district","school"))):
+                   cu=Depends(require_roles("admin", "district", "school"))):
     t = db.query(Teacher).filter(Teacher.id == tid).first()
     if not t:
         raise HTTPException(404, "Teacher not found")
     school = _teacher_school(db, t.school_id)
-    if school:
+    if school and cu.role not in ("admin",):
         _assert_teacher_scope(cu, school)
     db.delete(t)
     ip = get_client_ip(request)
@@ -103,10 +106,11 @@ def delete_teacher(tid: int, request: Request, db: Session = Depends(get_db),
 @teachers_router.get("/workload/analysis")
 def workload_analysis(district: Optional[str]=Query(None),
                       db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    if cu.role in ("admin", "enumerator", "community", "school", "reb"):
+    role = cu.role.value if hasattr(cu.role, "value") else str(cu.role)
+    if role in ("enumerator", "community", "school"):
         raise HTTPException(403, "Your role cannot access teacher workload analysis")
     q = db.query(School)
-    if cu.role == "district" and cu.district:
+    if role == "district" and cu.district:
         q = q.filter(School.district == cu.district)
     elif district:
         q = q.filter(School.district == district)

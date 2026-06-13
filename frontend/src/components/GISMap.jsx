@@ -72,7 +72,7 @@ function createPopupContent(school) {
     ['Rooms', school.classrooms || 0],
   ].map(([label, value]) => `
     <div style="background:#F8FAFC;border-radius:7px;padding:7px 6px;text-align:center">
-      <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">${escapeHtml(value)}</div>
+      <div style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;font-weight:700">${escapeHtml(value)}</div>
       <div style="font-size:9.5px;color:#475569">${escapeHtml(label)}</div>
     </div>
   `).join('')
@@ -89,7 +89,7 @@ function createPopupContent(school) {
   `).join('')
 
   return `
-    <div style="font-family:Inter,sans-serif;min-width:220px;padding:2px">
+    <div style="font-family:'Source Sans 3',system-ui,sans-serif;min-width:220px;padding:2px">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#0F172A">${escapeHtml(school.name)}</div>
       <div style="font-size:11.5px;color:#475569;margin-bottom:10px">
         ${escapeHtml(school.district)} &middot; ${escapeHtml(school.sector)} &middot; ${escapeHtml(school.school_type)}

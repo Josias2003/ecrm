@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 import { authAPI } from '../api/api'
-import { Modal, Btn, Input, Field } from './UI'
+import { Modal, Btn, Input, Field, Select } from './UI'
+import { DISTRICT_NAMES } from '../constants/rwandaDistricts'
 import toast from 'react-hot-toast'
 
 const DEMOS = [
@@ -14,18 +15,29 @@ const DEMOS = [
   { role: 'community', label: 'Community', email: 'david@gmail.com', pass: 'Comm@1234' },
 ]
 
-export default function SignInModal({ open, onClose }) {
+const REGISTER_ROLES = ['reb', 'district', 'school', 'enumerator', 'community']
+
+export default function SignInModal({ open, onClose, initialMode = 'login' }) {
   const { login, loading } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [selected, setSelected] = useState(null)
-  const [mode, setMode] = useState('login')
+  const [mode, setMode] = useState(initialMode)
   const [resetStep, setResetStep] = useState(1)
   const [otp, setOtp] = useState('')
   const [newPass, setNewPass] = useState('')
   const [resetEmail, setResetEmail] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
+  const [regLoading, setRegLoading] = useState(false)
+  const [regForm, setRegForm] = useState({
+    full_name: '', email: '', password: '', role: 'community',
+    phone: '', organization: '', district: '', school_id: '',
+  })
+
+  useEffect(() => {
+    if (open) setMode(initialMode)
+  }, [open, initialMode])
 
   const pick = (d) => { setSelected(d.role); setEmail(d.email); setPassword(d.pass) }
 
@@ -44,6 +56,31 @@ export default function SignInModal({ open, onClose }) {
       handleClose()
       navigate('/dashboard')
     } else toast.error(r.error)
+  }
+
+  const submitRegister = async (e) => {
+    e.preventDefault()
+    setRegLoading(true)
+    try {
+      const payload = {
+        full_name: regForm.full_name.trim(),
+        email: regForm.email.trim(),
+        password: regForm.password,
+        role: regForm.role,
+        phone: regForm.phone || undefined,
+        organization: regForm.organization || undefined,
+        district: regForm.district || undefined,
+        school_id: regForm.role === 'school' && regForm.school_id ? Number(regForm.school_id) : undefined,
+      }
+      const r = await authAPI.register(payload)
+      toast.success(r.data?.message || 'Registration submitted')
+      setMode('login')
+      setEmail(regForm.email)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Registration failed')
+    } finally {
+      setRegLoading(false)
+    }
   }
 
   const requestOtp = async (e) => {
@@ -82,13 +119,43 @@ export default function SignInModal({ open, onClose }) {
     }
   }
 
+  const title = mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Reset Password'
+
   return (
-    <Modal open={open} onClose={handleClose} title={mode === 'login' ? 'Sign In' : 'Reset Password'} width={480}>
-      {mode === 'login' ? (
-        <>
-          <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>
-            Select a demo role to auto-fill credentials
+    <Modal open={open} onClose={handleClose} title={title} width={520}>
+      {mode === 'register' ? (
+        <form onSubmit={submitRegister} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ fontSize: 13, color: 'var(--text2)' }}>
+            Official roles require administrator approval. Community accounts are activated immediately.
           </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Full name *"><Input value={regForm.full_name} onChange={e => setRegForm(p => ({ ...p, full_name: e.target.value }))} required /></Field>
+            <Field label="Email *"><Input type="email" value={regForm.email} onChange={e => setRegForm(p => ({ ...p, email: e.target.value }))} required /></Field>
+            <Field label="Password *"><Input type="password" value={regForm.password} onChange={e => setRegForm(p => ({ ...p, password: e.target.value }))} required /></Field>
+            <Field label="Phone"><Input value={regForm.phone} onChange={e => setRegForm(p => ({ ...p, phone: e.target.value }))} /></Field>
+            <Field label="Role *"><Select options={REGISTER_ROLES} value={regForm.role} onChange={e => setRegForm(p => ({ ...p, role: e.target.value }))} /></Field>
+            <Field label="Organization"><Input value={regForm.organization} onChange={e => setRegForm(p => ({ ...p, organization: e.target.value }))} /></Field>
+            {['district', 'enumerator', 'school', 'community'].includes(regForm.role) && (
+              <Field label={regForm.role === 'community' ? 'Home district (optional)' : 'District *'}>
+                <Select options={regForm.role === 'community' ? ['', ...DISTRICT_NAMES] : DISTRICT_NAMES} value={regForm.district} onChange={e => setRegForm(p => ({ ...p, district: e.target.value, school_id: '' }))} />
+              </Field>
+            )}
+            {regForm.role === 'school' && (
+              <p style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--text2)' }}>
+                Your school will be assigned by an administrator when your account is approved.
+              </p>
+            )}
+          </div>
+          <Btn type="submit" disabled={regLoading} style={{ width: '100%', justifyContent: 'center' }}>
+            {regLoading ? 'Submitting...' : 'Submit Registration'}
+          </Btn>
+          <button type="button" onClick={() => setMode('login')} style={{ fontSize: 12, color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
+            Already have an account? Sign in
+          </button>
+        </form>
+      ) : mode === 'login' ? (
+        <>
+          <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Select a demo role to auto-fill credentials</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18 }}>
             {DEMOS.map(d => (
               <div key={d.role} onClick={() => pick(d)}
@@ -97,9 +164,7 @@ export default function SignInModal({ open, onClose }) {
                   borderRadius: 10, padding: '10px 6px', textAlign: 'center', cursor: 'pointer',
                   background: selected === d.role ? 'var(--blue-lt)' : '#fff',
                 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 600, color: selected === d.role ? 'var(--blue)' : 'var(--text2)' }}>
-                  {d.label}
-                </div>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: selected === d.role ? 'var(--blue)' : 'var(--text2)' }}>{d.label}</div>
               </div>
             ))}
           </div>
@@ -110,10 +175,11 @@ export default function SignInModal({ open, onClose }) {
               style={{ fontSize: 12, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontWeight: 600 }}>
               Forgot password?
             </button>
-            <Btn type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Btn>
+            <Btn type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>{loading ? 'Signing in...' : 'Sign In'}</Btn>
           </form>
+          <button type="button" onClick={() => setMode('register')} style={{ marginTop: 14, fontSize: 13, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', width: '100%', fontWeight: 600 }}>
+            Create an account
+          </button>
         </>
       ) : (
         <>

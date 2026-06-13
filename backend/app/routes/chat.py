@@ -28,7 +28,7 @@ def _role_value(cu) -> str:
 def _can_access_room(cu, room: ChatRoom, db: Session) -> bool:
     role = _role_value(cu)
     if role == "admin":
-        return False
+        return True
     if role == "reb":
         if room.scope == "school":
             return False
@@ -71,8 +71,10 @@ def _can_access_room(cu, room: ChatRoom, db: Session) -> bool:
 def _can_message_user(cu, target: User) -> bool:
     role = _role_value(cu)
     target_role = target.role.value if hasattr(target.role, "value") else str(target.role)
-    if role == "admin" or target_role == "admin":
-        return False
+    if role == "admin":
+        return target_role != "admin"
+    if target_role == "admin":
+        return role != "admin"
     if role == "reb":
         return target_role in ("district", "school", "enumerator", "reb")
     if role == "district":
@@ -148,15 +150,15 @@ def create_room(payload: ChatRoomCreate, request: Request, db: Session = Depends
 
 @chat_router.get("/rooms", response_model=List[ChatRoomOut])
 def list_rooms(db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    if _role_value(cu) == "admin":
-        return []
     rooms = db.query(ChatRoom).order_by(ChatRoom.title).all()
     return [r for r in rooms if _can_access_room(cu, r, db)]
 
 @chat_router.get("/contacts", response_model=List[ChatContactOut])
 def list_contacts(db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    if _role_value(cu) in ("admin", "community"):
-        return []
+    if _role_value(cu) == "community":
+        users = db.query(User).filter(User.is_active == True, User.role == RoleEnum.admin).all()
+        out = [ChatContactOut(id=u.id, full_name=u.full_name, role="admin", district=u.district) for u in users]
+        return out
     users = db.query(User).filter(User.is_active == True, User.id != cu.id).all()
     out = []
     for u in users:
@@ -170,12 +172,14 @@ def list_contacts(db: Session = Depends(get_db), cu=Depends(get_current_user)):
 
 @chat_router.post("/direct/{user_id}", response_model=ChatRoomOut)
 def get_or_create_direct(user_id: int, db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    if _role_value(cu) in ("admin", "community"):
-        raise HTTPException(403, "Your role cannot start direct messages")
     target = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not target:
         raise HTTPException(404, "User not found")
-    if not _can_message_user(cu, target):
+    if _role_value(cu) == "community":
+        tr = target.role.value if hasattr(target.role, "value") else str(target.role)
+        if tr != "admin":
+            raise HTTPException(403, "Community users can only message system administrators")
+    elif not _can_message_user(cu, target):
         raise HTTPException(403, "You cannot message this user")
 
     direct_rooms = db.query(ChatRoom).filter(ChatRoom.scope == "direct").all()
@@ -244,8 +248,6 @@ def post_message(
     db: Session = Depends(get_db),
     cu=Depends(get_current_user),
 ):
-    if _role_value(cu) == "admin":
-        raise HTTPException(403, "System admin cannot use team chat")
     room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
     if not room:
         raise HTTPException(404, "Room not found")

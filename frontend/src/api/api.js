@@ -41,17 +41,22 @@ export const authAPI = {
   updateProfile: (data) => client.patch('/api/auth/me', data),
   changePassword: (data) => client.post('/api/auth/change-password', data),
   forgotPassword: (email) => client.post('/api/auth/forgot-password', { email }),
+  register: (data) => client.post('/api/auth/register', data),
   resetPassword: (data) => client.post('/api/auth/reset-password', data),
 }
 
 export const metaAPI = {
   districts: () => client.get('/api/meta/districts'),
+  stats: () => client.get('/api/meta/stats'),
 }
 
 export const usersAPI = {
   list: (skip = 0, limit = 500, params = {}) =>
     client.get('/api/users/', { params: { skip, limit, ...params } }),
   assignmentGaps: () => client.get('/api/users/assignment-gaps'),
+  pending: () => client.get('/api/users/pending'),
+  approve: (id, data) => client.post(`/api/users/${id}/approve`, data),
+  reject: (id, data) => client.post(`/api/users/${id}/reject`, data),
   create: (data) => client.post('/api/users/', data),
   update: (id, data) => client.patch(`/api/users/${id}`, data),
   delete: (id) => client.delete(`/api/users/${id}`),
@@ -106,6 +111,7 @@ export const analyticsAPI = {
   riskScores: (params) => client.get('/api/analytics/risk-scores', { params }),
   resourceInventory: (params) => client.get('/api/analytics/resource-inventory', { params }),
   teacherCoverage: (params) => client.get('/api/analytics/teacher-coverage', { params }),
+  equityWeights: () => client.get('/api/analytics/equity-weights'),
 }
 
 export const logsAPI = {
@@ -116,6 +122,13 @@ export const reportsAPI = {
   types: () => client.get('/api/reports/types'),
   preview: (params) => client.get('/api/reports/preview', { params }),
   export: (params) => client.get('/api/reports/export', { params, responseType: 'blob' }),
+}
+
+export const reportAssignmentsAPI = {
+  list: (params) => client.get('/api/report-assignments/', { params }),
+  assignees: (params) => client.get('/api/report-assignments/assignees', { params }),
+  create: (data) => client.post('/api/report-assignments/', data),
+  update: (id, data) => client.patch(`/api/report-assignments/${id}`, data),
 }
 
 export const chatAPI = {
@@ -132,8 +145,24 @@ export const systemAPI = {
   healthStats: () => client.get('/api/system/health-stats'),
 }
 
+export const requestsAPI = {
+  list: (params) => client.get('/api/requests/', { params }),
+  create: (data) => client.post('/api/requests/', data),
+  update: (id, data) => client.patch(`/api/requests/${id}`, data),
+}
+
+export const settingsAPI = {
+  list: () => client.get('/api/settings/'),
+  update: (key, data) => client.patch(`/api/settings/${key}`, data),
+}
+
 export const enrollmentAPI = {
   get: (sid) => client.get(`/api/enrollment/${sid}`),
+}
+
+export const dataEntryAPI = {
+  list: (params) => client.get('/api/data-entry/', { params }),
+  record: (data) => client.post('/api/data-entry/', data),
 }
 
 export default client

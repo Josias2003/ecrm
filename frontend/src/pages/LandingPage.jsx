@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { CSS, Btn } from '../components/UI'
 import SignInModal from '../components/SignInModal'
+import { metaAPI } from '../api/api'
 import {
   MapPin, BarChart3, BellRing, MessageSquare, FileText, Users,
   ArrowRight,
@@ -26,14 +28,30 @@ const FEATURES = [
   { icon: Users, title: 'Team Chat', desc: 'Category-based group rooms, direct messages, reply-to-message, and member presets.' },
 ]
 
-const STATS = [
-  { v: '390+', l: 'Public schools mapped' },
-  { v: '5,000+', l: 'Teachers tracked' },
+const STATS_FALLBACK = [
+  { v: '—', l: 'Public schools mapped' },
+  { v: '—', l: 'Teachers tracked' },
   { v: '30', l: 'Districts nationwide' },
 ]
 
 export default function LandingPage() {
   const [signInOpen, setSignInOpen] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
+
+  const { data: liveStats } = useQuery({
+    queryKey: ['landing-stats'],
+    queryFn: () => metaAPI.stats().then(r => r.data),
+    staleTime: 60_000,
+  })
+
+  const stats = liveStats ? [
+    { v: `${liveStats.schools}`, l: 'Public schools mapped' },
+    { v: `${liveStats.teachers}`, l: 'Teachers tracked' },
+    { v: `${liveStats.districts}`, l: 'Districts nationwide' },
+  ] : STATS_FALLBACK
+
+  const openSignIn = () => { setAuthMode('login'); setSignInOpen(true) }
+  const openRegister = () => { setAuthMode('register'); setSignInOpen(true) }
 
   return (
     <div style={{ minHeight: '100vh', background: '#0B1220', color: '#fff', position: 'relative', overflow: 'hidden' }}>
@@ -88,14 +106,14 @@ export default function LandingPage() {
               width: 44, height: 44, borderRadius: 12,
               background: 'linear-gradient(135deg,#2563EB,#06B6D4)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'Syne', fontWeight: 800, fontSize: 16,
+              fontWeight: 700, fontSize: 16,
             }}>EC</div>
             <div>
-              <div style={{ fontFamily: 'Syne', fontSize: 18, fontWeight: 800 }}>ECRM</div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 700 }}>ECRM</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>Rwanda · Resource Mapping</div>
             </div>
           </div>
-          <Btn onClick={() => setSignInOpen(true)} style={{ padding: '10px 22px' }}>
+          <Btn onClick={openSignIn} style={{ padding: '10px 22px' }}>
             Sign In <ArrowRight size={16} />
           </Btn>
         </header>
@@ -110,7 +128,7 @@ export default function LandingPage() {
             Education Community Resource Mapping
           </div>
           <h1 style={{
-            fontFamily: 'Syne', fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, lineHeight: 1.15,
+            fontFamily: 'var(--font-heading)', fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 700, lineHeight: 1.15,
             marginBottom: 20, maxWidth: 720, margin: '0 auto 20px',
             background: 'linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.75) 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
@@ -122,7 +140,7 @@ export default function LandingPage() {
             — all in one place for smarter education planning.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Btn onClick={() => setSignInOpen(true)} style={{ padding: '14px 28px', fontSize: 15 }}>
+            <Btn onClick={openSignIn} style={{ padding: '14px 28px', fontSize: 15 }}>
               Get Started — Sign In
             </Btn>
             <a href="#features" style={{
@@ -140,9 +158,9 @@ export default function LandingPage() {
           background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
           backdropFilter: 'blur(8px)',
         }}>
-          {STATS.map(s => (
+          {stats.map(s => (
             <div key={s.l} style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: 'Syne', fontSize: 28, fontWeight: 800, color: '#60A5FA' }}>{s.v}</div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 700, color: '#60A5FA' }}>{s.v}</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>{s.l}</div>
             </div>
           ))}
@@ -150,7 +168,7 @@ export default function LandingPage() {
 
         {/* Features */}
         <section id="features" style={{ marginBottom: 72 }}>
-          <h2 style={{ fontFamily: 'Syne', fontSize: 28, fontWeight: 800, marginBottom: 8, textAlign: 'center' }}>Platform Features</h2>
+          <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>Platform Features</h2>
           <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginBottom: 32, fontSize: 14 }}>
             Built for evidence-based decisions across Rwanda&apos;s education sector
           </p>
@@ -181,13 +199,18 @@ export default function LandingPage() {
           background: 'linear-gradient(135deg, rgba(37,99,235,0.2), rgba(6,182,212,0.1))',
           border: '1px solid rgba(96,165,250,0.2)',
         }}>
-          <h3 style={{ fontFamily: 'Syne', fontSize: 24, fontWeight: 800, marginBottom: 10 }}>Ready to get started?</h3>
+          <h3 style={{ fontSize: 24, fontWeight: 700, marginBottom: 10 }}>Ready to get started?</h3>
           <p style={{ color: 'rgba(255,255,255,0.55)', marginBottom: 24, fontSize: 14 }}>
             Sign in to access your dashboard, maps, reports, and school data.
           </p>
-          <Btn onClick={() => setSignInOpen(true)} style={{ padding: '12px 32px' }}>
-            Sign In <ArrowRight size={18} />
-          </Btn>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Btn onClick={openSignIn} style={{ padding: '12px 32px' }}>
+              Sign In <ArrowRight size={18} />
+            </Btn>
+            <Btn variant="outline" onClick={openRegister} style={{ padding: '12px 32px', color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}>
+              Create Account
+            </Btn>
+          </div>
         </section>
 
         <footer style={{ textAlign: 'center', padding: '24px 0 40px', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
@@ -195,7 +218,7 @@ export default function LandingPage() {
         </footer>
       </div>
 
-      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} initialMode={authMode} />
     </div>
   )
 }

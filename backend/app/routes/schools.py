@@ -8,7 +8,7 @@ import io, csv
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles, get_client_ip
-from app.models.models import School, Teacher, ResourceAlert, AuditLog, StatusEnum
+from app.models.models import School, Teacher, ResourceAlert, AuditLog, StatusEnum, EnrollmentHistory
 from app.schemas.schemas import SchoolOut, SchoolCreate, SchoolUpdate
 from app.services.school_serialize import serialize_school
 
@@ -68,6 +68,29 @@ def auto_alerts(db, school):
         db.add(ResourceAlert(school_id=school.id, alert_type="gps_unverified",
             level="info", message="GPS not yet field-verified"))
 
+def _record_enrollment_snapshot(db, school: School):
+    """Upsert current-year enrollment counts into history when counts change."""
+    year = datetime.utcnow().year
+    term = min(3, (datetime.utcnow().month - 1) // 4 + 1)
+    boys = school.students_boys or 0
+    girls = school.students_girls or 0
+    teachers = (school.teachers_male or 0) + (school.teachers_female or 0)
+    row = db.query(EnrollmentHistory).filter(
+        EnrollmentHistory.school_id == school.id,
+        EnrollmentHistory.year == year,
+        EnrollmentHistory.term == term,
+    ).first()
+    if row:
+        row.students_boys = boys
+        row.students_girls = girls
+        row.teachers = teachers
+    else:
+        db.add(EnrollmentHistory(
+            school_id=school.id, year=year, term=term,
+            students_boys=boys, students_girls=girls, teachers=teachers,
+        ))
+
+
 def _assert_school_scope(cu, school: School):
     if cu.role == "school" and cu.school_id and school.id != cu.school_id:
         raise HTTPException(403, "You can only access your own school")
@@ -76,10 +99,11 @@ def _assert_school_scope(cu, school: School):
             raise HTTPException(403, "Access denied for this district")
 
 def _schools_query(db, cu, district=None, status=None, school_type=None, gps_verified=None):
-    if cu.role == "admin":
-        raise HTTPException(403, "System admin cannot access school records")
     q = db.query(School)
-    if cu.role == "district" and cu.district:
+    role = cu.role.value if hasattr(cu.role, "value") else str(cu.role)
+    if role in ("admin", "reb"):
+        pass
+    elif role == "district" and cu.district:
         q = q.filter(School.district == cu.district)
     elif cu.role == "enumerator" and cu.district and cu.district != "National":
         q = q.filter(School.district == cu.district)
@@ -115,7 +139,7 @@ def list_schools(district: Optional[str]=Query(None), status: Optional[str]=Quer
 
 @schools_router.post("/", response_model=SchoolOut, status_code=201)
 def create_school(payload: SchoolCreate, request: Request, db: Session = Depends(get_db),
-                  cu=Depends(require_roles("district","enumerator"))):
+                  cu=Depends(require_roles("admin", "district", "enumerator"))):
     if cu.role in ("district", "enumerator") and cu.district and payload.district != cu.district:
         raise HTTPException(403, "You can only register schools in your assigned district")
     s = School(**payload.model_dump())
@@ -131,28 +155,42 @@ def create_school(payload: SchoolCreate, request: Request, db: Session = Depends
 
 @schools_router.get("/{sid}", response_model=SchoolOut)
 def get_school(sid: int, db: Session = Depends(get_db), cu=Depends(get_current_user)):
-    if cu.role == "admin":
-        raise HTTPException(403, "System admin cannot access school records")
     s = db.query(School).filter(School.id == sid).first()
     if not s:
         raise HTTPException(404, "School not found")
     # enforce same isolation rules as list endpoints
-    if cu.role == "school" and cu.school_id and cu.school_id != sid:
+    role = cu.role.value if hasattr(cu.role, "value") else str(cu.role)
+    if role in ("admin", "reb"):
+        pass
+    elif role == "school" and cu.school_id and cu.school_id != sid:
         raise HTTPException(403, "You can only access your own school")
-    if cu.role in ["district", "enumerator", "community"] and cu.district and cu.district != "National":
+    if cu.role in ("district", "enumerator", "community") and cu.district and cu.district != "National":
         if s.district != cu.district:
             raise HTTPException(403, "Access denied for this district")
     return serialize_school(s)
 
 @schools_router.patch("/{sid}", response_model=SchoolOut)
 def update_school(sid: int, payload: SchoolUpdate, request: Request, db: Session = Depends(get_db),
-                  cu=Depends(require_roles("district","enumerator","school"))):
+                  cu=Depends(require_roles("admin", "district", "enumerator", "school"))):
     s = db.query(School).filter(School.id == sid).first()
     if not s:
         raise HTTPException(404, "School not found")
     _assert_school_scope(cu, s)
-    for k, v in payload.model_dump(exclude_none=True).items():
+    old_counts = (
+        s.students_boys, s.students_girls,
+        s.teachers_male, s.teachers_female,
+    )
+    count_fields = {"students_boys", "students_girls", "teachers_male", "teachers_female"}
+    updates = payload.model_dump(exclude_none=True)
+    for k, v in updates.items():
         setattr(s, k, v)
+    if count_fields.intersection(updates.keys()):
+        new_counts = (
+            s.students_boys, s.students_girls,
+            s.teachers_male, s.teachers_female,
+        )
+        if new_counts != old_counts:
+            _record_enrollment_snapshot(db, s)
     s.status = compute_status(s)
     auto_alerts(db, s)
     ip = get_client_ip(request)
@@ -181,7 +219,7 @@ def verify_gps(sid: int, request: Request, db: Session = Depends(get_db),
     return {"message": "GPS coordinates verified", "school_id": sid}
 
 @schools_router.delete("/{sid}")
-def delete_school(sid: int, request: Request, db: Session = Depends(get_db), cu=Depends(require_roles("district"))):
+def delete_school(sid: int, request: Request, db: Session = Depends(get_db), cu=Depends(require_roles("admin", "district"))):
     s = db.query(School).filter(School.id == sid).first()
     if not s:
         raise HTTPException(404, "School not found")
@@ -196,10 +234,11 @@ def export_schools_csv(district: Optional[str]=Query(None),
                        request: Request = None,
                        db: Session = Depends(get_db),
                        cu=Depends(get_current_user)):
-    if cu.role == "admin":
-        raise HTTPException(403, "System admin cannot export school data")
     q = db.query(School)
-    if cu.role == "district" and cu.district:
+    role = cu.role.value if hasattr(cu.role, "value") else str(cu.role)
+    if role == "admin":
+        pass
+    elif role == "district" and cu.district:
         q = q.filter(School.district == cu.district)
     elif cu.role == "enumerator" and cu.district and cu.district != "National":
         q = q.filter(School.district == cu.district)

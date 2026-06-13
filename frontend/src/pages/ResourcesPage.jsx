@@ -28,7 +28,7 @@ export default function ResourcesPage() {
   if (isSchoolHead && !user?.school_id) {
     return (
       <div>
-        <PageHeader title="Resource Inventory" sub="Track and manage educational resources" />
+        <PageHeader title="Resource inventory" sub="Track and manage educational resources" />
         <SchoolEmptyState />
       </div>
     )
@@ -44,8 +44,8 @@ export default function ResourcesPage() {
   return (
     <div>
       <PageHeader
-        title="Resource Inventory"
-        sub={isSchoolHead ? 'Track and manage educational resources' : 'Resource gaps from live school records'}
+        title="Resource inventory"
+        sub={isSchoolHead ? 'Read-only view from your school record — edit via My School' : 'Resource gaps from live school records'}
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22 }}>
