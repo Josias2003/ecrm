@@ -180,6 +180,9 @@ class FeedbackUpdate(BaseModel):
     status: Optional[FeedbackStatusEnum] = None
     reviewer_note: Optional[str] = None
 
+class FeedbackDocumentRequest(BaseModel):
+    message: str
+
 class FeedbackMessageCreate(BaseModel):
     content: str
 
@@ -195,6 +198,9 @@ class FeedbackOut(BaseModel):
     reporter_name: Optional[str]; reporter_contact: Optional[str]
     status: str; reviewer_note: Optional[str]
     forwarded_to_reb: bool = False
+    evidence_files: List[dict] = []
+    document_request: Optional[str] = None
+    document_requested_at: Optional[datetime] = None
     school_name: Optional[str] = None
     district: Optional[str] = None
     created_at: datetime; updated_at: Optional[datetime]

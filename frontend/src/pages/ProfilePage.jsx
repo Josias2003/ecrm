@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../store/auth'
 import { authAPI } from '../api/api'
 import { PageHeader, Card, CardBody, Field, Input, Btn, Badge } from '../components/UI'
@@ -18,6 +18,10 @@ export default function ProfilePage() {
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setName(user?.full_name || '')
+  }, [user?.full_name])
 
   const saveProfile = async () => {
     if (!name.trim()) { toast.error('Name is required'); return }
@@ -72,6 +76,7 @@ export default function ProfilePage() {
             <Field label="Full name">
               <Input value={name} onChange={e => setName(e.target.value)} />
             </Field>
+<<<<<<< HEAD
             <Field label="Phone">
               <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+250 7XX XXX XXX" />
             </Field>
@@ -80,6 +85,31 @@ export default function ProfilePage() {
             </Field>
             <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
               District: <strong>{user?.district || 'National'}</strong>
+=======
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginTop: 16 }}>
+              {[
+                ['District', user?.district || 'National'],
+                ['Gender', user?.gender || 'Not recorded'],
+                ['Role', ROLE_LABELS[user?.role] || user?.role || '—'],
+                ['Email', user?.email || '—'],
+                ['Status', user?.is_active ? 'Active' : 'Inactive'],
+                ['School assignment', user?.school_id ? `School #${user.school_id}` : 'Not assigned'],
+                ['Member since', user?.created_at?.slice(0, 10) || '—'],
+                ['Account ID', user?.id ? `#${user.id}` : '—'],
+              ].map(([label, value]) => (
+                <div key={label} style={{
+                  padding: '10px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--bg2)',
+                  minWidth: 0,
+                }}>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+                </div>
+              ))}
+>>>>>>> cc1d96f (Latest changes)
             </div>
             <div style={{ marginTop: 20 }}>
               <Btn onClick={saveProfile} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Btn>

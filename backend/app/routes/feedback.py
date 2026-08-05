@@ -1,23 +1,74 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import json
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles, get_client_ip
 from app.models.models import Feedback, FeedbackMessage, School, AuditLog, User
 from app.schemas.schemas import (
     FeedbackOut, FeedbackCreate, FeedbackUpdate,
-    FeedbackMessageOut, FeedbackMessageCreate,
+    FeedbackMessageOut, FeedbackMessageCreate, FeedbackDocumentRequest,
 )
+from app.services.email import send_email
 
 feedback_router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
 
 FINAL_STATUSES = {"resolved", "closed"}
+ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 def log_action(db, user_id, action, desc, entity=None, eid=None, ip_address=None):
     db.add(AuditLog(user_id=user_id, action_type=action,
                     description=desc, entity=entity, entity_id=eid, ip_address=ip_address))
+
+def _role_value(cu) -> str:
+    return cu.role.value if hasattr(cu.role, "value") else str(cu.role)
+
+def _load_evidence(fb: Feedback) -> list[dict]:
+    if not fb.evidence_files:
+        return []
+    try:
+        items = json.loads(fb.evidence_files)
+        return items if isinstance(items, list) else []
+    except Exception:
+        return []
+
+async def _save_evidence(files: list[UploadFile] | None, feedback_id: int) -> list[dict]:
+    saved = []
+    for file in files or []:
+        if not file or not file.filename:
+            continue
+        ext = ALLOWED_IMAGE_TYPES.get(file.content_type)
+        if not ext:
+            raise HTTPException(415, "Only JPG, PNG, and WebP images are supported")
+        data = await file.read()
+        if len(data) > 5 * 1024 * 1024:
+            raise HTTPException(413, "Each photo must be 5MB or smaller")
+        folder = Path(settings.UPLOAD_DIR) / "feedback" / str(feedback_id)
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"{uuid.uuid4().hex}{ext}"
+        path = folder / name
+        path.write_bytes(data)
+        saved.append({
+            "name": file.filename,
+            "content_type": file.content_type,
+            "size": len(data),
+            "url": f"/uploads/feedback/{feedback_id}/{name}",
+        })
+    return saved
+
+def _notify(db, fb: Feedback, subject: str, body: str, action: str = "EMAIL") -> None:
+    try:
+        sent = send_email(fb.reporter_contact, subject, body)
+        status = "sent" if sent else "skipped (no SMTP or email contact)"
+        log_action(db, None, action, f"Notification {status} for feedback #{fb.id}: {subject}", "Feedback", fb.id)
+    except Exception as exc:
+        log_action(db, None, action, f"Email failed for feedback #{fb.id}: {exc}", "Feedback", fb.id)
 
 def _feedback_out(fb: Feedback) -> FeedbackOut:
     return FeedbackOut(
@@ -27,6 +78,9 @@ def _feedback_out(fb: Feedback) -> FeedbackOut:
         status=fb.status.value if hasattr(fb.status, "value") else str(fb.status),
         reviewer_note=fb.reviewer_note,
         forwarded_to_reb=bool(fb.forwarded_to_reb),
+        evidence_files=_load_evidence(fb),
+        document_request=fb.document_request,
+        document_requested_at=fb.document_requested_at,
         school_name=fb.school.name if fb.school else None,
         district=fb.school.district if fb.school else None,
         created_at=fb.created_at, updated_at=fb.updated_at,
@@ -78,12 +132,12 @@ def list_feedback(district: Optional[str]=Query(None),
 @feedback_router.post("/", response_model=FeedbackOut, status_code=201)
 def submit_feedback(payload: FeedbackCreate, request: Request, db: Session = Depends(get_db),
                     cu=Depends(get_current_user)):
-    if cu.role not in ["community", "school"]:
+    if _role_value(cu) not in ["community", "school"]:
         raise HTTPException(403, "Your role cannot submit community feedback")
     s = db.query(School).filter(School.id == payload.school_id).first()
     if not s:
         raise HTTPException(404, "School not found")
-    if cu.role == "school" and cu.school_id and cu.school_id != payload.school_id:
+    if _role_value(cu) == "school" and cu.school_id and cu.school_id != payload.school_id:
         raise HTTPException(403, "You can only submit feedback for your own school")
     fb = Feedback(**payload.model_dump(), user_id=cu.id)
     db.add(fb)
@@ -91,6 +145,54 @@ def submit_feedback(payload: FeedbackCreate, request: Request, db: Session = Dep
     db.add(FeedbackMessage(feedback_id=fb.id, user_id=cu.id, content=payload.description))
     ip = get_client_ip(request)
     log_action(db, cu.id, "FEEDBACK", f"Feedback submitted for {s.name}: {payload.issue_type}", "Feedback", ip_address=ip)
+    db.commit()
+    db.refresh(fb)
+    return _feedback_out(fb)
+
+@feedback_router.post("/with-evidence", response_model=FeedbackOut, status_code=201)
+async def submit_feedback_with_evidence(
+    request: Request,
+    school_id: int = Form(...),
+    issue_type: str = Form(...),
+    description: str = Form(...),
+    reporter_name: Optional[str] = Form(None),
+    reporter_contact: Optional[str] = Form(None),
+    photos: List[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    cu=Depends(get_current_user),
+):
+    if _role_value(cu) not in ["community", "school"]:
+        raise HTTPException(403, "Your role cannot submit community feedback")
+    s = db.query(School).filter(School.id == school_id).first()
+    if not s:
+        raise HTTPException(404, "School not found")
+    if _role_value(cu) == "school" and cu.school_id and cu.school_id != school_id:
+        raise HTTPException(403, "You can only submit feedback for your own school")
+    desc = (description or "").strip()
+    if len(desc) < 12:
+        raise HTTPException(422, "Description must be at least 12 characters")
+
+    fb = Feedback(
+        school_id=school_id,
+        issue_type=issue_type,
+        description=desc,
+        reporter_name=reporter_name,
+        reporter_contact=reporter_contact,
+        user_id=cu.id,
+    )
+    db.add(fb)
+    db.flush()
+    evidence = await _save_evidence(photos, fb.id)
+    fb.evidence_files = json.dumps(evidence)
+    db.add(FeedbackMessage(feedback_id=fb.id, user_id=cu.id, content=desc))
+    ip = get_client_ip(request)
+    log_action(db, cu.id, "FEEDBACK", f"Feedback submitted for {s.name}: {issue_type} ({len(evidence)} photo(s))", "Feedback", fb.id, ip_address=ip)
+    _notify(
+        db,
+        fb,
+        f"ECRM report received: {s.name}",
+        f"Your report has been received and is pending review.\n\nSchool: {s.name}\nIssue: {issue_type}\nPhotos: {len(evidence)}\n\n{desc}",
+    )
     db.commit()
     db.refresh(fb)
     return _feedback_out(fb)
@@ -129,6 +231,13 @@ def update_feedback(fid: int, payload: FeedbackUpdate, request: Request, db: Ses
     fb.reviewed_at = datetime.utcnow()
     ip = get_client_ip(request)
     log_action(db, cu.id, "UPDATE", f"Feedback #{fid} → {next_status}", "Feedback", fid, ip_address=ip)
+    if next_status != current or note:
+        _notify(
+            db,
+            fb,
+            f"ECRM status update: {fb.school.name if fb.school else 'School report'}",
+            f"Your report status is now {next_status}.\n\nOfficer note: {note or fb.reviewer_note or 'No note provided.'}",
+        )
     db.commit()
     db.refresh(fb)
     return _feedback_out(fb)
@@ -166,6 +275,35 @@ def forward_to_reb(fid: int, request: Request, db: Session = Depends(get_db),
     fb.forwarded_at = datetime.utcnow()
     ip = get_client_ip(request)
     log_action(db, cu.id, "UPDATE", f"Forwarded feedback #{fid} to REB", "Feedback", fid, ip_address=ip)
+    db.commit()
+    db.refresh(fb)
+    return _feedback_out(fb)
+
+@feedback_router.post("/{fid}/document-request", response_model=FeedbackOut)
+def request_documents(fid: int, payload: FeedbackDocumentRequest, request: Request,
+                      db: Session = Depends(get_db), cu=Depends(require_roles("reb","district"))):
+    fb = db.query(Feedback).join(School).filter(Feedback.id == fid).first()
+    if not fb:
+        raise HTTPException(404, "Feedback not found")
+    if _role_value(cu) == "district" and cu.district and fb.school.district != cu.district:
+        raise HTTPException(403, "Access denied")
+    if _role_value(cu) == "reb" and not fb.forwarded_to_reb:
+        raise HTTPException(403, "This feedback was not forwarded to REB")
+    message = (payload.message or "").strip()
+    if len(message) < 12:
+        raise HTTPException(422, "Document request must be at least 12 characters")
+    fb.document_request = message
+    fb.document_requested_at = datetime.utcnow()
+    db.add(FeedbackMessage(feedback_id=fid, user_id=cu.id, content=f"Document request: {message}"))
+    ip = get_client_ip(request)
+    log_action(db, cu.id, "DOCUMENT_REQUEST", f"Requested documents for feedback #{fid}", "Feedback", fid, ip_address=ip)
+    _notify(
+        db,
+        fb,
+        f"ECRM document request: {fb.school.name if fb.school else 'School report'}",
+        f"Additional information or documents are requested for your report:\n\n{message}",
+        action="DOCUMENT_REQUEST",
+    )
     db.commit()
     db.refresh(fb)
     return _feedback_out(fb)
@@ -222,3 +360,4 @@ def post_message(fid: int, payload: FeedbackMessageCreate, request: Request,
         author_name=cu.full_name, author_role=cu.role.value,
         created_at=msg.created_at,
     )
+

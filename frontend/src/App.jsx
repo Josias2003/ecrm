@@ -215,11 +215,14 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
 function Topbar({ pendingAlerts, user }) {
   const location = useLocation()
   const navigate = useNavigate()
+<<<<<<< HEAD
   const [search, setSearch] = useState('')
   const navOpts = { pendingAlerts }
   const breadcrumb = getPageBreadcrumb(user?.role, location.pathname, navOpts)
   const groupCtx = getNavGroupContext(user?.role, location.pathname, navOpts)
 
+=======
+>>>>>>> cc1d96f (Latest changes)
   const pageName = {
     '/dashboard':'Dashboard', '/schools':'Schools', '/gis':'GIS Map — Geospatial View',
     '/teachers':'Teacher Management', '/feedback':'Feedback & Reports',
@@ -232,6 +235,7 @@ function Topbar({ pendingAlerts, user }) {
     '/data-entry':'Data Entry', '/notifications':'Alerts & updates',
   }[location.pathname] || 'ECRM'
 
+<<<<<<< HEAD
   const title = breadcrumb?.group
     ? `${breadcrumb.root} · ${breadcrumb.group}`
     : breadcrumb?.root || pageName
@@ -271,47 +275,30 @@ function Topbar({ pendingAlerts, user }) {
             {title}
           </h1>
         </div>
-
-      <form onSubmit={submitSearch} style={{ display:'flex', alignItems:'center' }}>
-        <div
-          style={{
-            width:'100%',
-            display:'flex',
-            alignItems:'center',
-            gap:10,
-            background:'var(--card)',
-            border:'1.5px solid var(--border)',
-            borderRadius:12,
-            padding:'10px 12px',
-            transition:'border-color 150ms ease, box-shadow 150ms ease',
-          }}
-        >
-          <Search size={16} style={{ color:'#94A3B8', flexShrink:0 }} />
-          <input
-            value={search}
-            onChange={e=>setSearch(e.target.value)}
-            placeholder="Search schools, districts..."
-            style={{
-              border:'none',
-              background:'transparent',
-              fontSize:13.5,
-              color:'var(--text)',
-              outline:'none',
-              width:'100%',
-            }}
-          />
-          {search && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={()=>{ setSearch(''); navigate(location.pathname) }}
-              style={{ border:'none', background:'transparent', color:'#94A3B8', cursor:'pointer', fontWeight:800 }}
-            >
-              x
-            </button>
-          )}
-        </div>
-      </form>
+=======
+  return (
+    <header
+      style={{
+        height:62,
+        background:'var(--topbar)',
+        borderBottom:'1px solid var(--border)',
+        display:'grid',
+        gridTemplateColumns:'minmax(220px,1fr) auto',
+        alignItems:'center',
+        padding:'0 24px',
+        gap:14,
+        flexShrink:0,
+        position:'sticky',
+        top:0,
+        zIndex:50,
+      }}
+    >
+      <div style={{minWidth:0}}>
+        <h1 style={{ fontFamily:'Inter', fontSize:18, fontWeight:700, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {pageName}
+        </h1>
+      </div>
+>>>>>>> cc1d96f (Latest changes)
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12 }}>
         <button

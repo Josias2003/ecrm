@@ -1,9 +1,17 @@
+<<<<<<< HEAD
 import { useState, useCallback, useEffect } from 'react'
+=======
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+>>>>>>> cc1d96f (Latest changes)
 import SchoolFormFields from '../components/SchoolFormFields'
 import { formatLabel } from '../utils/format'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+<<<<<<< HEAD
 import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, logsAPI } from '../api/api'
+import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, usersAPI, logsAPI } from '../api/api'
+import { API_CONFIG } from '../config'
+>>>>>>> cc1d96f (Latest changes)
 import { useAuth } from '../store/auth'
 import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, Table,
          Modal, Field, Input, Select, Textarea, Tabs, IconToggleGroup, Empty, PageHeader,
@@ -14,8 +22,12 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 import {
   School, Users, BookOpen, AlertTriangle, TrendingUp, Download,
   Building2, Armchair, CircleCheck, Droplets, Zap, Monitor, MapPin,
+<<<<<<< HEAD
   Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound,
   List, LayoutGrid, Map,
+=======
+  Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound, Search,
+>>>>>>> cc1d96f (Latest changes)
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DISTRICT_NAMES, sectorsFor } from '../constants/rwandaDistricts'
@@ -674,6 +686,8 @@ export function FeedbackPage() {
   const [threadRow, setThreadRow] = useState(null)
   const [threadText, setThreadText] = useState('')
   const [actionNote, setActionNote] = useState('')
+  const [documentRequest, setDocumentRequest] = useState('')
+  const [photos, setPhotos] = useState([])
   const [form, setForm] = useState({school_id:'',issue_type:'Infrastructure',description:'',reporter_name:'',reporter_contact:''})
   const [page, setPage] = useState(1)
 
@@ -739,12 +753,23 @@ export function FeedbackPage() {
     onSuccess:()=>{ qc.invalidateQueries(['feedback-all']); toast.success('Issue reopened') },
     onError:e=>toast.error(e.response?.data?.detail||'Reopen failed'),
   })
+  const docReqM = useMutation({
+    mutationFn:({id,message})=>feedbackAPI.requestDocuments(id,{message}),
+    onSuccess:()=>{
+      qc.invalidateQueries(['feedback-all'])
+      qc.invalidateQueries(['feedback-messages',threadRow?.id])
+      setDocumentRequest('')
+      toast.success('Document request sent')
+    },
+    onError:e=>toast.error(e.response?.data?.detail||'Request failed'),
+  })
   const subM = useMutation({
-    mutationFn:d=>feedbackAPI.submit(d),
+    mutationFn:d=>feedbackAPI.submitWithEvidence(d),
     onSuccess:()=>{
       qc.invalidateQueries(['feedback-all'])
       setSubmitOpen(false)
       setForm({school_id:'',issue_type:'Infrastructure',description:'',reporter_name:'',reporter_contact:''})
+      setPhotos([])
       toast.success('Report submitted')
     },
     onError:e=>toast.error(e.response?.data?.detail||'Submit failed'),
@@ -757,6 +782,7 @@ export function FeedbackPage() {
   const openThread = (row) => {
     setThreadRow(row)
     setActionNote(row.reviewer_note||'')
+    setDocumentRequest(row.document_request||'')
     setThreadOpen(true)
   }
 
@@ -877,6 +903,7 @@ export function FeedbackPage() {
           {key:'issue_type',label:'Type',render:v=><Badge status="reviewed" label={formatLabel(v)}/>},
           {key:'school_name',label:'School',render:v=>v||'—'},
           {key:'reporter_name',label:'Reporter',render:v=>v||'Anonymous'},
+          {key:'evidence_files',label:'Photos',render:v=>v?.length ? <Badge status="info" label={`${v.length} photo${v.length>1?'s':''}`}/> : '—'},
           {key:'created_at',label:'Date',render:v=>v?.slice(0,10)},
           {key:'status',label:'Status',render:v=><Badge status={v} label={formatLabel(v)}/>},
           {key:'id',label:'',render:(v,row)=>(
@@ -1198,4 +1225,111 @@ export function AnalyticsPage() {
   )
 }
 
+<<<<<<< HEAD
+=======
+// ════════════════════════════════════════════════════════════════════
+// USERS PAGE
+// ════════════════════════════════════════════════════════════════════
+export function UsersPage() {
+  const qc = useQueryClient()
+  const [addOpen, setAddOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [form, setForm] = useState({full_name:'',email:'',password:'',role:'district',district:'Gasabo',school_id:null})
+  const { data: users=[], isLoading } = useQuery({ queryKey:['users'], queryFn:()=>usersAPI.list().then(r=>r.data) })
+
+  const addM = useMutation({ mutationFn:d=>usersAPI.create(d), onSuccess:()=>{ qc.invalidateQueries(['users']); setAddOpen(false); toast.success('User created') }, onError: apiErr })
+  const delM = useMutation({ mutationFn:id=>usersAPI.delete(id), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User removed') }, onError: apiErr })
+  const togM = useMutation({ mutationFn:({id,active})=>usersAPI.update(id,{is_active:active}), onSuccess:()=>{ qc.invalidateQueries(['users']); toast.success('User status updated') }, onError: apiErr })
+
+  const roleColors = {admin:'critical',reb:'reviewed',district:'pending',school:'good',enumerator:'info',community:'moderate'}
+  const set = k=>e=>setForm(p=>({...p,[k]:e.target.value}))
+  const q = search.trim().toLowerCase()
+  const filteredUsers = useMemo(() => {
+    if (!q) return users
+    return users.filter(u => [
+      u.full_name,
+      u.email,
+      u.role,
+      u.gender || 'Not recorded',
+      u.district || 'National',
+      u.is_active ? 'active' : 'inactive',
+      u.school_id ? `school ${u.school_id}` : '',
+      u.created_at?.slice(0, 10),
+    ].some(v => String(v || '').toLowerCase().includes(q)))
+  }, [users, q])
+
+  return (
+    <div>
+      <PageHeader title="User Management" sub={`${filteredUsers.length} of ${users.length} system users`}
+        action={<Btn onClick={()=>setAddOpen(true)}>+ Create User</Btn>}/>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:22}}>
+        <StatCard label="Visible Users" value={filteredUsers.length} sub={q ? 'Matching search' : 'All roles'} accent="blue"/>
+        <StatCard label="Active"       value={filteredUsers.filter(u=>u.is_active).length}  sub="Can sign in" accent="green"/>
+        <StatCard label="Inactive"     value={filteredUsers.filter(u=>!u.is_active).length} sub="Deactivated" accent="red" trend="down"/>
+      </div>
+
+      <Card><CardBody>
+        <div style={{marginBottom:14,position:'relative',maxWidth:460}}>
+          <Search size={16} style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text3)'}}/>
+          <Input
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+            placeholder="Search users by name, email, role, district..."
+            style={{paddingLeft:38}}
+          />
+        </div>
+        <Table loading={isLoading} columns={[
+          {key:'full_name',label:'User',render:(v,row)=>(
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:32,height:32,borderRadius:9,flexShrink:0,
+                background:'linear-gradient(135deg,#2563EB,#06B6D4)',
+                display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#fff'}}>
+                {v?.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}
+              </div>
+              <div>
+                <strong>{v}</strong>
+                <div style={{fontSize:11,color:'var(--text2)'}}>{row.email}</div>
+                <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>
+                  {row.district || 'National'} · {row.gender || 'Gender not recorded'}{row.school_id ? ` · School #${row.school_id}` : ''}
+                </div>
+              </div>
+            </div>
+          )},
+          {key:'role',label:'Role',render:v=><Badge status={roleColors[v]||'info'} label={formatLabel(v)}/>},
+          {key:'district',label:'District',render:v=>v || 'National'},
+          {key:'is_active',label:'Status',render:v=><Badge status={v?'good':'critical'} label={v?'Active':'Inactive'}/>},
+          {key:'created_at',label:'Created',render:v=>v?.slice(0,10)},
+          {key:'id',label:'Actions',render:(v,row)=>(
+            <div style={{display:'flex',gap:5}}>
+              <Btn size="sm" variant="outline" onClick={()=>togM.mutate({id:v,active:!row.is_active})}>
+                {row.is_active?'Deactivate':'Activate'}
+              </Btn>
+              <Btn size="sm" variant="danger" onClick={()=>{if(confirm('Remove?'))delM.mutate(v)}}>Remove</Btn>
+            </div>
+          )},
+        ]} data={filteredUsers}/>
+        {!isLoading && filteredUsers.length === 0 && (
+          <div style={{fontSize:13,color:'var(--text3)',textAlign:'center',padding:'18px 0'}}>No users match your search.</div>
+        )}
+      </CardBody></Card>
+
+      <Modal open={addOpen} onClose={()=>setAddOpen(false)} title="Create New User">
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <Field label="Full Name *"><Input placeholder="e.g. Uwimana Alice" value={form.full_name} onChange={set('full_name')}/></Field>
+          <Field label="Email *"><Input type="email" placeholder="name@reb.rw" value={form.email} onChange={set('email')}/></Field>
+          <Field label="Password *"><Input type="password" placeholder="Min 8 chars" value={form.password} onChange={set('password')}/></Field>
+          <Field label="Role"><Select options={['admin','reb','district','school','enumerator','community']} value={form.role} onChange={set('role')}/></Field>
+          <Field label="District"><Select options={['National', ...DISTRICT_NAMES]} value={form.district} onChange={set('district')}/></Field>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:20}}>
+          <Btn variant="outline" onClick={()=>setAddOpen(false)}>Cancel</Btn>
+          <Btn onClick={()=>addM.mutate(form)} disabled={addM.isPending}>{addM.isPending?'Creating...':'Create User'}</Btn>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+>>>>>>> cc1d96f (Latest changes)
 export default SchoolsPage

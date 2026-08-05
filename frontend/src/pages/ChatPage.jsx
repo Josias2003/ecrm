@@ -256,11 +256,13 @@ export default function ChatPage() {
                 </div>
               )}
               {filteredMessages.map(m => {
-                const mine = m.user_id === user?.id
+                const mine = Number(m.user_id) === Number(user?.id)
+                const authorName = mine ? (user?.full_name || 'You') : (m.author_name || 'Unknown')
+                const authorRole = mine ? user?.role : m.author_role
                 return (
                   <div key={m.id} style={{ marginBottom: 14, textAlign: mine ? 'right' : 'left' }}>
                     <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                      {m.author_name} · {formatLabel(m.author_role)}
+                      {mine ? 'You' : authorName} · {formatLabel(authorRole)}
                     </div>
                     <div style={{
                       display: 'inline-block', maxWidth: '78%', padding: '10px 12px', borderRadius: 12,
