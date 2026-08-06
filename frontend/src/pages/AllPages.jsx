@@ -1,17 +1,10 @@
-<<<<<<< HEAD
-import { useState, useCallback, useEffect } from 'react'
-=======
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
->>>>>>> cc1d96f (Latest changes)
 import SchoolFormFields from '../components/SchoolFormFields'
 import { formatLabel } from '../utils/format'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-<<<<<<< HEAD
-import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, logsAPI } from '../api/api'
 import { schoolsAPI, teachersAPI, feedbackAPI, alertsAPI, analyticsAPI, usersAPI, logsAPI } from '../api/api'
 import { API_CONFIG } from '../config'
->>>>>>> cc1d96f (Latest changes)
 import { useAuth } from '../store/auth'
 import { Card, CardHeader, CardBody, Badge, Btn, StatCard, Alert, Table,
          Modal, Field, Input, Select, Textarea, Tabs, IconToggleGroup, Empty, PageHeader,
@@ -22,12 +15,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 import {
   School, Users, BookOpen, AlertTriangle, TrendingUp, Download,
   Building2, Armchair, CircleCheck, Droplets, Zap, Monitor, MapPin,
-<<<<<<< HEAD
   Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound,
-  List, LayoutGrid, Map,
-=======
-  Library, FlaskConical, Globe, Lock, UtensilsCrossed, UserRound, Search,
->>>>>>> cc1d96f (Latest changes)
+  List, LayoutGrid, Map, Search,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DISTRICT_NAMES, sectorsFor } from '../constants/rwandaDistricts'
@@ -1225,8 +1214,6 @@ export function AnalyticsPage() {
   )
 }
 
-<<<<<<< HEAD
-=======
 // ════════════════════════════════════════════════════════════════════
 // USERS PAGE
 // ════════════════════════════════════════════════════════════════════
@@ -1331,5 +1318,4 @@ export function UsersPage() {
   )
 }
 
->>>>>>> cc1d96f (Latest changes)
 export default SchoolsPage

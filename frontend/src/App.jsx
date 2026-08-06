@@ -215,14 +215,11 @@ function Sidebar({ user, pendingAlerts, collapsed, onToggle }) {
 function Topbar({ pendingAlerts, user }) {
   const location = useLocation()
   const navigate = useNavigate()
-<<<<<<< HEAD
   const [search, setSearch] = useState('')
   const navOpts = { pendingAlerts }
   const breadcrumb = getPageBreadcrumb(user?.role, location.pathname, navOpts)
   const groupCtx = getNavGroupContext(user?.role, location.pathname, navOpts)
 
-=======
->>>>>>> cc1d96f (Latest changes)
   const pageName = {
     '/dashboard':'Dashboard', '/schools':'Schools', '/gis':'GIS Map — Geospatial View',
     '/teachers':'Teacher Management', '/feedback':'Feedback & Reports',
@@ -235,7 +232,6 @@ function Topbar({ pendingAlerts, user }) {
     '/data-entry':'Data Entry', '/notifications':'Alerts & updates',
   }[location.pathname] || 'ECRM'
 
-<<<<<<< HEAD
   const title = breadcrumb?.group
     ? `${breadcrumb.root} · ${breadcrumb.group}`
     : breadcrumb?.root || pageName
@@ -256,81 +252,77 @@ function Topbar({ pendingAlerts, user }) {
     navigate(`${target}?q=${encodeURIComponent(query)}`)
   }
 
-  return (
-    <div style={{ position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
-      <header
-        style={{
-          height: 62,
-          background: 'var(--topbar)',
-          borderBottom: groupCtx ? 'none' : '1px solid var(--border)',
-          display: 'grid',
-          gridTemplateColumns: 'minmax(220px,1fr) 400px auto',
-          alignItems: 'center',
-          padding: '0 24px',
-          gap: 14,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {title}
-          </h1>
-        </div>
-=======
-  return (
+ return (
+  <div style={{ position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
     <header
       style={{
-        height:62,
-        background:'var(--topbar)',
-        borderBottom:'1px solid var(--border)',
-        display:'grid',
-        gridTemplateColumns:'minmax(220px,1fr) auto',
-        alignItems:'center',
-        padding:'0 24px',
-        gap:14,
-        flexShrink:0,
-        position:'sticky',
-        top:0,
-        zIndex:50,
+        height: 62,
+        background: 'var(--topbar)',
+        borderBottom: groupCtx ? 'none' : '1px solid var(--border)',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(220px,1fr) auto',
+        alignItems: 'center',
+        padding: '0 24px',
+        gap: 14,
       }}
     >
-      <div style={{minWidth:0}}>
-        <h1 style={{ fontFamily:'Inter', fontSize:18, fontWeight:700, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-          {pageName}
-        </h1>
-      </div>
->>>>>>> cc1d96f (Latest changes)
-
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:12 }}>
-        <button
-          aria-label="Notifications"
-          onClick={() => navigate(user?.role === 'school' ? '/notifications' : '/alerts')}
+      <div style={{ minWidth: 0 }}>
+        <h1
           style={{
-            width:42,
-            height:42,
-            borderRadius:12,
-            border:'1px solid var(--border)',
-            background:'var(--bg2)',
-            cursor:'pointer',
-            display:'flex',
-            alignItems:'center',
-            justifyContent:'center',
-            position:'relative',
+            fontFamily: 'Inter',
+            fontSize: 18,
+            fontWeight: 700,
+            color: 'var(--text)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
-          <Bell size={18} style={{ color:'var(--text)' }} />
+          {title}
+        </h1>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 12,
+        }}
+      >
+        <button
+          aria-label="Notifications"
+          onClick={() =>
+            navigate(user?.role === 'school' ? '/notifications' : '/alerts')
+          }
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            border: '1px solid var(--border)',
+            background: 'var(--bg2)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+          }}
+        >
+          <Bell size={18} style={{ color: 'var(--text)' }} />
+
           {pendingAlerts > 0 && (
             <span
               style={{
-                position:'absolute',
-                top:7,
-                right:7,
-                background:'var(--red)',
-                color:'#fff',
-                fontSize:11,
-                fontWeight:800,
-                padding:'2px 6px',
-                borderRadius:999,
-                border:'2px solid var(--topbar)',
+                position: 'absolute',
+                top: 7,
+                right: 7,
+                background: 'var(--red)',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 800,
+                padding: '2px 6px',
+                borderRadius: 999,
+                border: '2px solid var(--topbar)',
               }}
             >
               {pendingAlerts}
@@ -339,14 +331,15 @@ function Topbar({ pendingAlerts, user }) {
         </button>
       </div>
     </header>
-      {groupCtx && (
-        <TopbarSecondaryNav
-          groupLabel={groupCtx.group.label}
-          items={groupCtx.children}
-        />
-      )}
-    </div>
-  )
+
+    {groupCtx && (
+      <TopbarSecondaryNav
+        groupLabel={groupCtx.group.label}
+        items={groupCtx.children}
+      />
+    )}
+  </div>
+)
 }
 
 function AppShell({ user }) {

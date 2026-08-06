@@ -76,7 +76,6 @@ export default function ProfilePage() {
             <Field label="Full name">
               <Input value={name} onChange={e => setName(e.target.value)} />
             </Field>
-<<<<<<< HEAD
             <Field label="Phone">
               <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+250 7XX XXX XXX" />
             </Field>
@@ -85,7 +84,7 @@ export default function ProfilePage() {
             </Field>
             <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
               District: <strong>{user?.district || 'National'}</strong>
-=======
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginTop: 16 }}>
               {[
@@ -109,7 +108,6 @@ export default function ProfilePage() {
                   <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
                 </div>
               ))}
->>>>>>> cc1d96f (Latest changes)
             </div>
             <div style={{ marginTop: 20 }}>
               <Btn onClick={saveProfile} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Btn>
