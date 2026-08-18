@@ -6,15 +6,6 @@ import { Modal, Btn, Input, Field, Select } from './UI'
 import { DISTRICT_NAMES } from '../constants/rwandaDistricts'
 import toast from 'react-hot-toast'
 
-const DEMOS = [
-  { role: 'admin', label: 'System Admin', email: 'admin@reb.rw', pass: 'Admin@1234' },
-  { role: 'reb', label: 'REB Officer', email: 'uwase@mineduc.gov.rw', pass: 'Reb@1234' },
-  { role: 'district', label: 'District Officer', email: 'eric@gasabo.gov.rw', pass: 'District@1' },
-  { role: 'school', label: 'School Head', email: 'paul@school.rw', pass: 'School@1234' },
-  { role: 'enumerator', label: 'Enumerator', email: 'rose@reb.rw', pass: 'Field@1234' },
-  { role: 'community', label: 'Community', email: 'david@gmail.com', pass: 'Comm@1234' },
-]
-
 const REGISTER_ROLES = ['reb', 'district', 'school', 'enumerator', 'community']
 
 export default function SignInModal({ open, onClose, initialMode = 'login' }) {
@@ -22,7 +13,6 @@ export default function SignInModal({ open, onClose, initialMode = 'login' }) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [selected, setSelected] = useState(null)
   const [mode, setMode] = useState(initialMode)
   const [resetStep, setResetStep] = useState(1)
   const [otp, setOtp] = useState('')
@@ -38,8 +28,6 @@ export default function SignInModal({ open, onClose, initialMode = 'login' }) {
   useEffect(() => {
     if (open) setMode(initialMode)
   }, [open, initialMode])
-
-  const pick = (d) => { setSelected(d.role); setEmail(d.email); setPassword(d.pass) }
 
   const handleClose = () => {
     setMode('login')
@@ -155,19 +143,6 @@ export default function SignInModal({ open, onClose, initialMode = 'login' }) {
         </form>
       ) : mode === 'login' ? (
         <>
-          <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Select a demo role to auto-fill credentials</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18 }}>
-            {DEMOS.map(d => (
-              <div key={d.role} onClick={() => pick(d)}
-                style={{
-                  border: `2px solid ${selected === d.role ? 'var(--blue)' : 'var(--border)'}`,
-                  borderRadius: 10, padding: '10px 6px', textAlign: 'center', cursor: 'pointer',
-                  background: selected === d.role ? 'var(--blue-lt)' : '#fff',
-                }}>
-                <div style={{ fontSize: 10.5, fontWeight: 600, color: selected === d.role ? 'var(--blue)' : 'var(--text2)' }}>{d.label}</div>
-              </div>
-            ))}
-          </div>
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Field label="Email"><Input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></Field>
             <Field label="Password"><Input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></Field>
