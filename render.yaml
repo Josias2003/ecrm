@@ -1,0 +1,47 @@
+databases:
+  - name: ecrm-db
+    plan: free
+    databaseName: ecrm
+    user: ecrm
+
+services:
+  - type: web
+    name: ecrm-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecrm-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "120"
+      # Update this after the Vercel frontend is deployed (its URL is only
+      # known once that deploy finishes), then trigger a redeploy here.
+      - key: CORS_ORIGINS
+        value: http://localhost:5173
+      - key: RATE_LIMIT_REQUESTS
+        value: "100"
+      - key: RATE_LIMIT_WINDOW
+        value: "60"
+      - key: UPLOAD_DIR
+        value: uploads
+
+# Uploaded files (backend/uploads) live on local disk and are wiped on every
+# deploy/restart on the free plan. If the app needs uploads to persist,
+# upgrade the service to a paid instance type and add a persistent disk:
+#
+#   disk:
+#     name: ecrm-uploads
+#     mountPath: /opt/render/project/src/backend/uploads
+#     sizeGB: 1
+#
+# (Persistent disks are not available on Render's free instance type.)

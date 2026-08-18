@@ -460,11 +460,31 @@ VITE_API_URL=http://localhost:8000
 
 ## 12. Production Deployment
 
-1. Set `DATABASE_URL` to PostgreSQL (or managed SQL).
-2. Generate a strong `SECRET_KEY`; restrict `CORS_ORIGINS` to your domain.
-3. Build frontend: `cd frontend && npm run build`.
-4. Serve `frontend/dist` via nginx or static middleware behind HTTPS.
-5. Run API with a production ASGI server (e.g. gunicorn + uvicorn workers).
+Backend on Render, frontend on Vercel. A `render.yaml` blueprint and `frontend/vercel.json` are included in this repo.
+
+### Backend (Render)
+
+1. In the Render dashboard: **New → Blueprint**, connect the `ecrm` GitHub repo. Render reads `render.yaml` at the repo root and provisions a free Postgres database (`ecrm-db`) plus a web service (`ecrm-backend`) with `SECRET_KEY` auto-generated.
+2. Deploy. Note the resulting service URL, e.g. `https://ecrm-backend.onrender.com`.
+3. Leave `CORS_ORIGINS` as-is for now — it gets updated once the frontend URL exists (step 3 below).
+4. First deploy runs `ensure_schema()` automatically against the new Postgres database, so the schema is created with no manual migration step. Seed data (`backend/app/seeds`), if wanted, must be run manually against the deployed DB.
+
+### Frontend (Vercel)
+
+1. In the Vercel dashboard: **Add New → Project**, import the `ecrm` GitHub repo.
+2. Set **Root Directory** to `frontend`. Vercel auto-detects the Vite framework preset (build command `npm run build`, output `dist`).
+3. Add an environment variable `VITE_API_URL` = your Render backend URL from above (no trailing slash).
+4. Deploy. Note the resulting frontend URL, e.g. `https://ecrm.vercel.app`.
+
+### Close the loop
+
+1. Back in Render, update the backend's `CORS_ORIGINS` env var to the Vercel URL (comma-separated if you also keep a custom domain), then redeploy.
+2. Visit the Vercel URL and confirm login/API calls succeed (no CORS errors in the browser console).
+
+### Notes
+
+- Uploaded files (`backend/uploads`) live on ephemeral disk on Render's free plan and are wiped on every deploy/restart — see the comment block at the bottom of `render.yaml` for adding a persistent disk on a paid instance type if the app needs uploads to survive deploys.
+- Render's free web service spins down after inactivity, so the first request after idling will be slow (cold start).
 
 ---
 
