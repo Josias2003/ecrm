@@ -26,10 +26,8 @@ services:
         generateValue: true
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "120"
-      # Update this after the Vercel frontend is deployed (its URL is only
-      # known once that deploy finishes), then trigger a redeploy here.
       - key: CORS_ORIGINS
-        value: http://localhost:5173
+        value: https://ecrm-coral.vercel.app
       - key: RATE_LIMIT_REQUESTS
         value: "100"
       - key: RATE_LIMIT_WINDOW
